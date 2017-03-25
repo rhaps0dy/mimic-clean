@@ -3,15 +3,21 @@ SET search_path TO mimiciii;
 -- naming scheme: c_* for categorical variables, b_* for boolean variables, r_*
 -- for real values, i_* for integers (the last 3 can be treated the same)
 
--- inf_* is used for informational variables that we haven't converted to
+-- info_* is used for informational variables that we haven't converted to
 -- numbers yet.
 -- pred_* is used for possible prediction targets.
 
+DROP MATERIALIZED VIEW IF EXISTS static_icustays;
+CREATE MATERIALIZED VIEW static_icustays as
 SELECT * FROM (
 -- Subquery for filtering based on calculated expressions
 
 SELECT
+  i.icustay_id,
+  i.intime as info_icu_intime,
+  a.admittime as info_admit_time,
   EXTRACT(EPOCH FROM (a.admittime - i.intime)) AS r_admit_time,
+  a.dischtime,
   -- Admission time relative to ICU entrance time.
   -- Doesn't take into account previous ICU stays in the same admission.
 
@@ -74,7 +80,8 @@ SELECT
         WHEN p.gender='F' THEN 1
         ELSE -1 END) AS c_gender,
 
-  (EXTRACT(EPOCH FROM (i.intime - p.dob)) / (3600 * 24 * 365)) as r_age,
+  -- Some patients have age 300, which is actually 90
+  LEAST(EXTRACT(EPOCH FROM (i.intime - p.dob)) / (3600 * 24 * 365), 90) as r_age,
 
   (SELECT COUNT(*) FROM admissions t
    WHERE t.subject_id = i.subject_id
@@ -84,6 +91,7 @@ SELECT
    WHERE t.subject_id = i.subject_id
    AND t.intime < i.intime) AS i_previous_icustays,
 
+  a.dischtime as info_discharge_time,
   EXTRACT(EPOCH FROM (a.dischtime - i.intime)) as r_pred_discharge_time,
   (CASE WHEN a.discharge_location LIKE 'HOME' THEN 0
         WHEN a.discharge_location LIKE '%HOME%' THEN 1 -- includes HOME HEALTH
@@ -92,6 +100,7 @@ SELECT
         ELSE 3 END) as c_pred_discharge_location,
         -- bunch of things that sound like somewhat serious conditions
 
+  p.dod as info_dod,
   EXTRACT(EPOCH FROM (p.dod - i.intime)) as r_pred_death_time,
   -- Some death times are inconsistent between a.deathtime, a.dischtime and p.dod.
   -- patients.dod is used as the authoritative source, since it is strictly more
