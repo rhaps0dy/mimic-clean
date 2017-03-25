@@ -7,6 +7,7 @@ SET search_path TO mimiciii;
 -- numbers yet.
 -- pred_* is used for possible prediction targets.
 
+COPY (
 SELECT * FROM (
 -- Subquery for filtering based on calculated expressions
 
@@ -15,17 +16,19 @@ SELECT
   -- Admission time relative to ICU entrance time.
   -- Doesn't take into account previous ICU stays in the same admission.
 
+  i.hadm_id, i.icustay_id, i.subject_id,
+
   (CASE WHEN a.admission_type='ELECTIVE' THEN 0
         WHEN a.admission_type='NEWBORN' THEN 1
         WHEN a.admission_type='URGENT' THEN 3
         WHEN a.admission_type='EMERGENCY' THEN 4
         ELSE -1 END) AS c_admit_type,
 
-  (CASE WHEN a.admission_location='EMERGENCY ROOM ADMIT' THEN 0
-        WHEN a.admission_location='TRANSFER FROM HOSP/EXTRAM' THEN 1
-        WHEN a.admission_location='TRANSFER FROM OTHER HEALT' THEN 2
-        WHEN a.admission_location='CLINIC REFERRAL/PREMATURE' THEN 3
-        WHEN a.admission_location='** INFO NOT AVAILABLE **' THEN 4
+  (CASE WHEN a.admission_location='** INFO NOT AVAILABLE **' THEN 0
+        WHEN a.admission_location='EMERGENCY ROOM ADMIT' THEN 1
+        WHEN a.admission_location='TRANSFER FROM HOSP/EXTRAM' THEN 2
+        WHEN a.admission_location='TRANSFER FROM OTHER HEALT' THEN 3
+        WHEN a.admission_location='CLINIC REFERRAL/PREMATURE' THEN 4
         WHEN a.admission_location='TRANSFER FROM SKILLED NUR' THEN 5
         WHEN a.admission_location='TRSF WITHIN THIS FACILITY' THEN 6
         WHEN a.admission_location='HMO REFERRAL/SICK' THEN 7
@@ -72,7 +75,7 @@ SELECT
 
   (CASE WHEN p.gender='M' THEN 0
         WHEN p.gender='F' THEN 1
-        ELSE -1 END) AS c_gender,
+        ELSE -1 END) AS b_gender,
 
   (EXTRACT(EPOCH FROM (i.intime - p.dob)) / (3600 * 24 * 365)) as r_age,
 
@@ -118,9 +121,10 @@ AND s.c_admit_type >= 0
 AND s.c_admit_location >= 0
 AND s.c_insurance >= 0
 AND s.c_marital_status >= 0
-AND s.c_gender >= 0
+AND s.b_gender >= 0
 AND s.c_ethnicity >= 0
 -- All of this removes no patient
+) TO '/tmp/static_patients.csv' DELIMITER ',' CSV HEADER
 ;
 
 
