@@ -13,15 +13,13 @@ SELECT * FROM (
 -- Subquery for filtering based on calculated expressions
 
 SELECT
-  i.icustay_id,
+  i.hadm_id, i.icustay_id, i.subject_id,
   i.intime as info_icu_intime,
   a.admittime as info_admit_time,
   EXTRACT(EPOCH FROM (a.admittime - i.intime)) AS r_admit_time,
   a.dischtime,
   -- Admission time relative to ICU entrance time.
   -- Doesn't take into account previous ICU stays in the same admission.
-
-  i.hadm_id, i.icustay_id, i.subject_id,
 
   (CASE WHEN a.admission_type='ELECTIVE' THEN 0
         WHEN a.admission_type='NEWBORN' THEN 1
@@ -132,7 +130,7 @@ AND s.c_marital_status >= 0
 AND s.b_gender >= 0
 AND s.c_ethnicity >= 0
 -- All of this removes no patient
-) TO '/tmp/static_patients.csv' DELIMITER ',' CSV HEADER
+--) TO '/tmp/static_patients.csv' DELIMITER ',' CSV HEADER
 ;
 
 

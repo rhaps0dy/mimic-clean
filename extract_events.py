@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
 
+####
+# This file lists all the items and their possible values: whether they are
+# categorical or numbers or something else
+####
+
 import psycopg2
 import sys
 import pickle
@@ -29,7 +34,15 @@ from memoize_pickle import memoize_pickle
 
 ex_float = re.compile("([+-]?[0-9]*\\.?[0-9]+)")
 
-def list_categories(cursor, table, max_n_categories=20, window_size=100000):
+def get_newborns(cursor, table):
+    if table == 'labevents':
+        patient_id = 'subject_id'
+    else:
+        patient_id = 'icustay_id'
+    cursor.execute("SELECT {:s} FROM static_icustays WHERE r_age < 15".format(patient_id))
+    return set(e for e, in cursor.fetchall())
+
+def list_categories(cursor, _cursor, table, max_n_categories=20, window_size=100000):
     def close_item(itemid, label, item_is_number, item_all_are_None, categories, item_categories, n_numeric_values, n_total_values):
         item_categories[itemid] = {'categories': categories,
                 'frequency': n_total_values}
@@ -48,15 +61,19 @@ def list_categories(cursor, table, max_n_categories=20, window_size=100000):
     item_categories = {}
     prev_itemid = None
     print("Executing query...")
+    newborn_icustay_ids = get_newborns(_cursor, table)
     cursor.itersize = window_size
-    cursor.execute(("SELECT t.itemid, value FROM {:s} t "
+    cursor.execute(("SELECT {:s}, t.itemid, value, valuenum FROM {:s} t "
                     "ORDER BY t.itemid;")
-                    .format(table))
+                    .format(patient_id, table))
     for window_i in it.count():
         at_least_one_item = False
         print("Iterating...")
         _i = 0
-        for itemid, value in cursor:
+        for icustay_id, itemid, value, valuenum in cursor:
+            if icustay_id in newborn_icustay_ids:
+                continue
+
             _i += 1
             if _i > window_size:
                 break
@@ -81,15 +98,26 @@ def list_categories(cursor, table, max_n_categories=20, window_size=100000):
                 if not item_all_are_None and not printed_message_spurious:
                     print("Item {:d} {:s} has some spurious Nones".format(itemid, label))
                     printed_message_spurious = True
+                if valuenum is not None:
+                    n_numeric_values += 1
                 continue
             match = ex_float.search(value)
             if match is None:
                 item_is_number = False
                 if value not in categories:
                     categories[value] = len(categories)
+                if valuenum is not None:
+                    print("WTF, valuenum is {:f} and value is {:s}, item {:d} {:s}".format(valuenum, value, itemid, label))
             else:
                 n = float(match.group(1))
                 n_numeric_values += 1
+                try:
+                    float(value)
+                except ValueError:
+                    if value not in categories:
+                        categories[value] = len(categories)
+                else:
+                    n_numeric_values += 1
                 #if len(match.group(1)) < len(value):
                 #    print("Non-full number \"{:s}\" for item {:d} {:s}"
                 #          .format(value, itemid, label))
@@ -102,8 +130,8 @@ def list_categories(cursor, table, max_n_categories=20, window_size=100000):
 
 def get_lister_function(table):
     @memoize_pickle("{:s}_item_categories.pkl".format(table))
-    def f(cursor, **kwargs):
-        return list_categories(cursor, table, **kwargs)
+    def f(cursor, _cursor, **kwargs):
+        return list_categories(cursor, _cursor, table, **kwargs)
     return f
 
 if __name__ == "__main__":
@@ -112,6 +140,6 @@ if __name__ == "__main__":
     cursor = conn.cursor()
     cursor.execute("SET search_path TO mimiciii;")
     n_cursor = conn.cursor('n_cursor')
-    #get_lister_function('chartevents')(n_cursor)
-    #get_lister_function('outputevents')(n_cursor)
-    #get_lister_function('labevents')(n_cursor)
+    #get_lister_function('chartevents')(n_cursor, cursor)
+    #get_lister_function('outputevents')(n_cursor, cursor)
+    get_lister_function('labevents')(n_cursor, cursor)
