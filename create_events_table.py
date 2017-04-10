@@ -12,6 +12,7 @@ import math
 import csv
 import itertools as it
 import collections
+import datetime
 from extract_events import ex_float, METAVISION_MIN_ID
 from do_one_ventilation import prepare_item_categories, get_item_names
 
@@ -35,15 +36,15 @@ class chartevents(SelfIter):
         self.icustays = icustays
         it_cats = prepare_item_categories("chartevents")
         it_cats.sort(key=lambda e: -e[2]['frequency'])
-        self.headers = []
+        self.headers = ['subject_id', 'icustay_id', 'hour']
         self.item_names = item_names
         self.categories = {}
         for _, id, d in it_cats:
             self.headers.append(self.item_names[id])
-            if len(d) == 1 and float in d:
+            if len(d['categories']) == 1 and float in d['categories']:
                 self.categories[id] = float
             else:
-                self.categories[id] = d
+                self.categories[id] = d['categories']
 
         self.c.execute(("SELECT subject_id, icustay_id, itemid, charttime, "
                         "value, valuenum, valueuom "
@@ -77,21 +78,18 @@ class chartevents(SelfIter):
                     else:
                         match = ex_float.search(value)
                         if match is None:
+                            subject_id, icustay_id, itemid, charttime, value, \
+                                valuenum, valueuom = self.last_c = next(self.c)
                             continue
                         v = float(match.group(1))
                     value_dict[itemid] += v
                     divide_dict[itemid] += 1.0
                 else:
-                    if valuenum is not None:
-                        print("Valuenum not none for itemid {:d} icustay_id {:d}"
-                              .format(itemid, icustay_id))
                     value_dict[itemid] = cats[value]
                 subject_id, icustay_id, itemid, charttime, value, valuenum, \
                     valueuom = self.last_c = next(self.c)
         except StopIteration:
             self.next_stop = True
-        for i, d in divide_dict.items():
-            value_dict[i] /= d
         for i, v in value_dict.items():
             if i in divide_dict:
                 v /= divide_dict[i]
@@ -134,6 +132,7 @@ def main():
         writer.writeheader()
         for row in iterator:
             writer.writerow(row)
+            csvfile.flush()
 
 if __name__ == '__main__':
     main()
