@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/USSR/bin/env python3
 
 ####
 # This file extracts all of one patient ventilation event's time data
@@ -12,24 +12,23 @@ import math
 import csv
 import itertools as it
 from memoize_pickle import memoize_pickle
-from extract_events import ex_float
+from extract_events import ex_float, METAVISION_MIN_ID
 from create_drug_durations import drugs as DRUGS
 import collections
-
-METAVISION_MIN_ID = 220000
 
 def get_item_names(cursor):
     cursor.execute("SELECT itemid, label FROM d_items")
     return dict(iter(cursor))
 
-def prepare_item_categories(table, only_metavision=True):
+def prepare_item_categories(table, only_metavision=True, with_table=True):
     with open('{:s}_item_categories.pkl'.format(table), 'rb') as f:
         item_categories = pickle.load(f)
     item_categories = list(item_categories.items())
     if only_metavision:
         item_categories = list(filter(lambda a: a[0] >= METAVISION_MIN_ID, item_categories))
-    with_table = list(map(lambda t: (table,) + t, item_categories))
-    return with_table
+    if with_table:
+        return list(map(lambda t: (table,) + t, item_categories))
+    return item_categories
 
 def get_item_categories(cursor):
     chartevents_item_categories = prepare_item_categories('chartevents')
