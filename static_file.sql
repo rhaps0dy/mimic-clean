@@ -15,6 +15,7 @@ SELECT * FROM (
 SELECT
   i.hadm_id, i.icustay_id, i.subject_id,
   i.intime as info_icu_intime,
+  i.outtime as info_icu_outtime,
   a.admittime as info_admit_time,
   EXTRACT(EPOCH FROM (a.admittime - i.intime)) AS r_admit_time,
   a.dischtime,
@@ -116,14 +117,14 @@ SELECT
 FROM icustays i LEFT JOIN patients p ON (i.subject_id = p.subject_id)
 LEFT JOIN admissions a ON (i.hadm_id = a.hadm_id)
 ) s
-WHERE s.r_admit_time < 0
--- This removes 486 patients, who are admitted after being put into the ICU. Of
--- those:
---  * More than 1h difference: 349
---  * More than 4h difference: 99
---  * More than a day difference: 2
+-- WHERE s.r_admit_time < 0
+-- -- This removes 486 patients, who are admitted after being put into the ICU. Of
+-- -- those:
+-- --  * More than 1h difference: 349
+-- --  * More than 4h difference: 99
+-- --  * More than a day difference: 2
 
-AND s.c_admit_type >= 0
+WHERE s.c_admit_type >= 0
 AND s.c_admit_location >= 0
 AND s.c_insurance >= 0
 AND s.c_marital_status >= 0

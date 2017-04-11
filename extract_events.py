@@ -32,7 +32,7 @@ from memoize_pickle import memoize_pickle
 #    - 51464: EU/dl and mg/dl which are equivalent -- What is SM and MOD?
 #    - 51514: EU/dL and mg/dL, which are equivalent
 
-ex_float = re.compile("([+-]?[0-9]*\\.?[0-9]+)")
+ex_float = re.compile("([+-]?[0-9]+\\.[0-9]+)")
 METAVISION_MIN_ID = 220000
 
 def get_newborns(cursor, table):
