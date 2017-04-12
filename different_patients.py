@@ -3,11 +3,12 @@ import sys
 import itertools as it
 import collections
 import math
+import pickle
 
 def get_sets(fname):
     patients = collections.defaultdict(lambda: [math.inf, -math.inf], {})
     patient_hours = set()
-    n_rows =0 
+    n_rows = 0
     with open(fname, 'r', newline='') as csvfile:
         f = csv.reader(csvfile)
         f = iter(f)
@@ -27,3 +28,8 @@ if __name__ == '__main__':
     print("{:s}: {:d} icustays, {:d} icustay-hours, {:d} rows".format(sys.argv[1], len(p1), len(ph1), nr1))
     print("{:s}: {:d} icustays, {:d} icustay-hours, {:d} rows".format(sys.argv[2], len(p2), len(ph2), nr2))
 
+    for p, t in p2.items():
+        p1[p][0] = min(p1[p][0], t[0])
+        p1[p][1] = max(p1[p][1], t[1])
+    with open('icustay_indices.pkl', 'wb') as f:
+        pickle.dump(dict(p1), f)
