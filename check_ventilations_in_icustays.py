@@ -43,5 +43,3 @@ if __name__ == '__main__':
                     if not icustay_indices[subject_id, icustay_id][1] >= e_hi:
                         print("bad end", icustay_id, icustay_indices[subject_id, icustay_id][1], e_hi)
                         icustay_indices[subject_id, icustay_id] = (icustay_indices[subject_id, icustay_id][0], e_hi)
-    with open('icustay_indices.pkl', 'wb') as f:
-        icustay_indices = pickle.dump(icustay_indices, f)

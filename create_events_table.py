@@ -23,6 +23,14 @@ class TableIter:
         self.item_names = get_item_names(cursor)
         self.icustays = self.all_patient_icustays(cursor)
         # self.icustay_indices now contains the indices that have to be written
+        # Prune indices that must not be written
+        for subject_id, d in list(self.icustays.items()):
+            for icustay_id in list(d.keys()):
+                if (subject_id, icustay_id) not in self.icustay_indices:
+                    del d[icustay_id]
+            if len(d) == 0:
+                del self.icustays[subject_id]
+
         self.icustay_completed = dict(zip(self.icustay_indices.keys(),
                                           it.repeat(False)))
         self.headers = ['subject_id', 'icustay_id', 'hour']
@@ -62,10 +70,10 @@ class TableIter:
         #print("Hour index", hour_index)
         hour_end = intime + datetime.timedelta(hours=hour_index+1)
 
-        #if hour_index < self.icustay_indices[subject_id, icustay_id][0]:
-        #    print("Hour index too early for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][0])
-        #elif hour_index > self.icustay_indices[subject_id, icustay_id][1]:
-        #    print("Hour index too late for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][1])
+        if hour_index < self.icustay_indices[subject_id, icustay_id][0]:
+            print("Hour index too early for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][0])
+        elif hour_index > self.icustay_indices[subject_id, icustay_id][1]:
+            print("Hour index too late for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][1])
 
         return hour_index, hour_end, icustay_id
 
@@ -273,17 +281,106 @@ class drugevents(TableIter):
         del w_cursor
         super(drugevents, self).__init__(None, cursor)
 
-        clean_drugs = list(map(lambda s: 'B ' + s, DRUGS))
-        self.headers += clean_drugs
+        self.event_intervals = collections.defaultdict(
+            lambda: collections.defaultdict(lambda: [], {}),
+            {})
+        for drug in DRUGS:
+            drug = drug['drug_name']
+            cursor.execute(("SELECT i.subject_id, d.icustay_id, d.starttime, "
+                            "d.endtime "
+                            "FROM drugs.{:s}_durations d JOIN icustays i "
+                            "ON d.icustay_id=i.icustay_id ").format(drug))
+            for row in cursor:
+                key = tuple(row[:2])
+                if key in self.icustay_indices:
+                    self.event_intervals['B '+drug][key].append(tuple(row[2:4]))
 
-        cursor.execute(("SELECT i.subject_id, d.icustay_id, d.starttime, "
-                        "d.endtime "
-                        "FROM drugs.{:s}_durations d JOIN icustays i "
-                        "ON d.icustay_id=i.icustay_id "
-                        "ORDER BY i.subject_id, d.icustay_id"))
+        cursor.execute(("SELECT i.subject_id, v.icustay_id, v.starttime, "
+                        "v.endtime "
+                        "FROM ventdurations v JOIN icustays i "
+                        "ON v.icustay_id=i.icustay_id "))
+        for row in cursor:
+            key = tuple(row[:2])
+            if key in self.icustay_indices:
+                self.event_intervals['B in_ventilator'][key].append(tuple(row[2:4]))
+        drug_headers = list(self.event_intervals.keys())
+
+        for _, column in self.event_intervals.items():
+            for _, intervals in column.items():
+                intervals.sort(key=lambda e: e[1])
+                i = 1
+                while i < len(intervals):
+                    # Make intervals disjoint
+                    if intervals[i][0] <= intervals[i-1][1]:
+                        intervals[i-1] = (intervals[i-1][0], intervals[i][1])
+                        del intervals[i]
+                    else:
+                        i += 1
+
+        for header, column in self.event_intervals.items():
+            for _, intervals in column.items():
+                intervals.sort(key=lambda e: e[1])
+                for i in range(1, len(intervals)):
+                    assert intervals[i][0] > intervals[i-1][1], \
+                        "Intervals are disjoint"
+
+        self.headers.append('B pred last_ventilator')
+        self.headers.append('F pred hours_until_death')
+        self.headers.append('B in_ventilator')
+        self.headers += drug_headers
+
+        cursor.execute("SELECT subject_id, dod FROM patients")
+        self.patient_dod = dict(cursor.fetchall())
 
     def __iter__(self):
-        return iter(self.cleaned_list)
+        self.current_hour = None
+        self.icustay_iter = iter(sorted(list(self.icustay_indices.keys())))
+        self.current_icustay = None
+        return self
+
+    def __next__(self):
+        if self.current_icustay is None:
+            self.current_icustay = next(self.icustay_iter)
+        subject_id, icustay_id = self.current_icustay
+        start_i, end_i = self.icustay_indices[self.current_icustay]
+        if self.current_hour is None:
+            self.current_hour = start_i
+        else:
+            self.current_hour += 1
+        hour_start = self.icustays[subject_id][icustay_id][0] + \
+                     datetime.timedelta(hours=self.current_hour)
+        hour_end = hour_start + datetime.timedelta(hours=1)
+
+        r = {'subject_id': subject_id, 'icustay_id': icustay_id,
+             'hour': self.current_hour}
+        for header, d in self.event_intervals.items():
+            interval_list = d[subject_id, icustay_id]
+            r[header] = 0
+            if len(interval_list) > 0:
+                if hour_start >= interval_list[0][1]:
+                    # Remove the first interval
+                    del interval_list[0]
+                elif hour_end >= interval_list[0][0]:
+                    r[header] = 1
+
+            if header == 'B in_ventilator':
+                if r[header] == 1 and (hour_end >= interval_list[0][1] or
+                                       self.current_hour >= end_i):
+                    # This is the last hour of the ventilator
+                    assert len(interval_list) >= 1
+                    if len(interval_list) == 1:
+                        r['B pred last_ventilator'] = 1
+                    else:
+                        r['B pred last_ventilator'] = 0
+                    if self.patient_dod[subject_id] is None:
+                        hours_until_death = 80. * 365*24 # 80 years
+                    else:
+                        hours_until_death = (
+                            self.patient_dod[subject_id]-hour_end).total_seconds() / 3600
+                    r['F pred hours_until_death'] = hours_until_death
+        if self.current_hour >= end_i:
+            self.current_hour = self.current_icustay = None
+        return r
 
 def main():
     tables = {'chartevents', 'outputevents', 'drugevents'}
