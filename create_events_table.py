@@ -306,15 +306,17 @@ class drugevents(TableIter):
 
     def prepare_event_intervals(self, cursor):
         for drug in DRUGS:
-            drug = drug['drug_name']
-            cursor.execute(("SELECT i.subject_id, d.icustay_id, d.starttime, "
-                            "d.endtime "
-                            "FROM drugs.{:s}_durations d JOIN icustays i "
-                            "ON d.icustay_id=i.icustay_id ").format(drug))
+            if 'mv_itemid_test' not in drug:
+                # we are forced to skip sodium bicarbonate
+                continue
+            cursor.execute(("SELECT subject_id, icustay_id, starttime, "
+                            "endtime "
+                            "FROM inputevents_mv "
+                            "WHERE itemid {mv_itemid_test:s}").format(**drug))
             for row in cursor:
                 key = tuple(row[:2])
                 if key in self.icustay_indices:
-                    self.event_intervals['B '+drug][key].append(tuple(row[2:4]))
+                    self.event_intervals['B '+drug['drug_name']][key].append(tuple(row[2:4]))
         drug_headers = list(self.event_intervals.keys())
 
         cursor.execute(("SELECT i.subject_id, v.icustay_id, v.starttime, "
