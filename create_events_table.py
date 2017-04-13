@@ -264,7 +264,7 @@ class outputevents(TableIter):
         for id, _ in hs:
             self.item_names[id] = 'F ' + self.item_names[id]
             self.headers.append(self.item_names[id])
-        self.default_r = dict(zip(self.headers, it.repeat(0)))
+        self.default_r = collections.defaultdict(lambda: 0.0, {})
 
     def prepare_last_c_processing(self):
         pass
