@@ -280,30 +280,10 @@ class drugevents(TableIter):
     def __init__(self, w_cursor, cursor):
         del w_cursor
         super(drugevents, self).__init__(None, cursor)
-
         self.event_intervals = collections.defaultdict(
             lambda: collections.defaultdict(lambda: [], {}),
             {})
-        for drug in DRUGS:
-            drug = drug['drug_name']
-            cursor.execute(("SELECT i.subject_id, d.icustay_id, d.starttime, "
-                            "d.endtime "
-                            "FROM drugs.{:s}_durations d JOIN icustays i "
-                            "ON d.icustay_id=i.icustay_id ").format(drug))
-            for row in cursor:
-                key = tuple(row[:2])
-                if key in self.icustay_indices:
-                    self.event_intervals['B '+drug][key].append(tuple(row[2:4]))
-
-        cursor.execute(("SELECT i.subject_id, v.icustay_id, v.starttime, "
-                        "v.endtime "
-                        "FROM ventdurations v JOIN icustays i "
-                        "ON v.icustay_id=i.icustay_id "))
-        for row in cursor:
-            key = tuple(row[:2])
-            if key in self.icustay_indices:
-                self.event_intervals['B in_ventilator'][key].append(tuple(row[2:4]))
-        drug_headers = list(self.event_intervals.keys())
+        self.prepare_event_intervals(cursor)
 
         for _, column in self.event_intervals.items():
             for _, intervals in column.items():
@@ -324,10 +304,32 @@ class drugevents(TableIter):
                     assert intervals[i][0] > intervals[i-1][1], \
                         "Intervals are disjoint"
 
+    def prepare_event_intervals(self, cursor):
+        for drug in DRUGS:
+            drug = drug['drug_name']
+            cursor.execute(("SELECT i.subject_id, d.icustay_id, d.starttime, "
+                            "d.endtime "
+                            "FROM drugs.{:s}_durations d JOIN icustays i "
+                            "ON d.icustay_id=i.icustay_id ").format(drug))
+            for row in cursor:
+                key = tuple(row[:2])
+                if key in self.icustay_indices:
+                    self.event_intervals['B '+drug][key].append(tuple(row[2:4]))
+        drug_headers = list(self.event_intervals.keys())
+
+        cursor.execute(("SELECT i.subject_id, v.icustay_id, v.starttime, "
+                        "v.endtime "
+                        "FROM ventdurations v JOIN icustays i "
+                        "ON v.icustay_id=i.icustay_id "))
+        for row in cursor:
+            key = tuple(row[:2])
+            if key in self.icustay_indices:
+                self.event_intervals['B in_ventilator'][key].append(tuple(row[2:4]))
+
         self.headers.append('B pred last_ventilator')
         self.headers.append('F pred hours_until_death')
         self.headers.append('B in_ventilator')
-        self.headers += drug_headers
+        self.headers += sorted(drug_headers)
 
         cursor.execute("SELECT subject_id, dod FROM patients")
         self.patient_dod = dict(cursor.fetchall())
@@ -363,27 +365,59 @@ class drugevents(TableIter):
                 elif hour_end >= interval_list[0][0]:
                     r[header] = 1
 
-            if header == 'B in_ventilator':
-                if r[header] == 1 and (hour_end >= interval_list[0][1] or
-                                       self.current_hour >= end_i):
-                    # This is the last hour of the ventilator
-                    assert len(interval_list) >= 1
-                    if len(interval_list) == 1:
-                        r['B pred last_ventilator'] = 1
-                    else:
-                        r['B pred last_ventilator'] = 0
-                    if self.patient_dod[subject_id] is None:
-                        hours_until_death = 80. * 365*24 # 80 years
-                    else:
-                        hours_until_death = (
-                            self.patient_dod[subject_id]-hour_end).total_seconds() / 3600
-                    r['F pred hours_until_death'] = hours_until_death
+            self.extra_hour_processing(subject_id, r, header, hour_end, interval_list, end_i)
         if self.current_hour >= end_i:
             self.current_hour = self.current_icustay = None
         return r
 
+    def extra_hour_processing(self, subject_id, r, header, hour_end, interval_list, end_i):
+        if header == 'B in_ventilator':
+            if r[header] == 1 and (hour_end >= interval_list[0][1] or
+                                    self.current_hour >= end_i):
+                # This is the last hour of the ventilator
+                assert len(interval_list) >= 1
+                if len(interval_list) == 1:
+                    r['B pred last_ventilator'] = 1
+                else:
+                    r['B pred last_ventilator'] = 0
+                if self.patient_dod[subject_id] is None:
+                    hours_until_death = 80. * 365*24 # 80 years
+                else:
+                    hours_until_death = (
+                        self.patient_dod[subject_id]-hour_end).total_seconds() / 3600
+                r['F pred hours_until_death'] = hours_until_death
+
+class procedureevents_mv(drugevents):
+    def prepare_event_intervals(self, cursor):
+        family_cluster = {
+            228125, # Family meeting held
+            228126, # Family met with Case Manager
+            228127, # Family met with Social Worker
+            228128, # Family updated by MD
+            228129, # Family updated by RN
+            228136, # Family notified of transfer
+            }
+            # 228228, "Family meeting attempted, unable"
+            # Maybe it's a proxy for family not visiting the patient.
+        cursor.execute(("SELECT p.subject_id, p.icustay_id, p.starttime, "
+                           "p.endtime, p.itemid, di.label "
+                           "FROM procedureevents_mv p JOIN d_items di "
+                           "ON di.itemid=p.itemid"))
+        for subject_id, icustay_id, starttime, endtime, itemid, label in cursor:
+            key = (subject_id, icustay_id)
+            if key in self.icustay_indices:
+                if itemid in family_cluster:
+                    label = 'Family meeting'
+                self.event_intervals['B '+label][key].append((starttime, endtime))
+        self.headers += sorted(list(self.event_intervals.keys()))
+
+    def extra_hour_processing(self, *_):
+        pass
+
+#class labevents(TableIter):
+
 def main():
-    tables = {'chartevents', 'outputevents', 'drugevents'}
+    tables = {'chartevents', 'outputevents', 'drugevents', 'procedureevents_mv'}
     if sys.argv[1] not in tables:
         print("Usage: {:s} {:s}".format(sys.argv[0], str(tables)))
         sys.exit(1)
