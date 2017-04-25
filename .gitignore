@@ -3,3 +3,5 @@ DRUG_*
 *.pkl
 __pycache__
 *.csv
+GEN_*
+*.gz
