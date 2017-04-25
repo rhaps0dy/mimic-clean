@@ -34,13 +34,11 @@ from memoize_pickle import memoize_pickle
 
 ex_float = re.compile("([+-]?[0-9]+\\.[0-9]+)")
 METAVISION_MIN_ID = 220000
+MIN_AGE = 14
 
-def get_newborns(cursor, table):
-    if table == 'labevents':
-        patient_id = 'subject_id'
-    else:
-        patient_id = 'icustay_id'
-    cursor.execute("SELECT {:s} FROM static_icustays WHERE r_age < 15".format(patient_id))
+def get_newborns(cursor, table, patient_id):
+    cursor.execute("SELECT {:s} FROM static_icustays WHERE r_age < %s"
+                   .format(patient_id), [MIN_AGE])
     return set(e for e, in cursor.fetchall())
 
 def list_categories(cursor, _cursor, table, max_n_categories=20, window_size=100000):
@@ -62,7 +60,11 @@ def list_categories(cursor, _cursor, table, max_n_categories=20, window_size=100
     item_categories = {}
     prev_itemid = None
     print("Executing query...")
-    newborn_icustay_ids = get_newborns(_cursor, table)
+    if table == 'labevents':
+        patient_id = 'subject_id'
+    else:
+        patient_id = 'icustay_id'
+    newborn_icustay_ids = get_newborns(_cursor, table, patient_id)
     cursor.itersize = window_size
     cursor.execute(("SELECT {:s}, t.itemid, value, valuenum FROM {:s} t "
                     "ORDER BY t.itemid;")
@@ -101,6 +103,9 @@ def list_categories(cursor, _cursor, table, max_n_categories=20, window_size=100
                     printed_message_spurious = True
                 if valuenum is not None:
                     n_numeric_values += 1
+                continue
+            if valuenum is not None:
+                n_numeric_values += 1
                 continue
             match = ex_float.search(value)
             if match is None:

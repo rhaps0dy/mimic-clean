@@ -13,7 +13,7 @@ import csv
 import itertools as it
 import collections
 import datetime
-from extract_events import ex_float, METAVISION_MIN_ID
+from extract_events import ex_float, METAVISION_MIN_ID, MIN_AGE
 from do_one_ventilation import prepare_item_categories, get_item_names
 from create_drug_durations import drugs as DRUGS
 
@@ -81,7 +81,7 @@ class TableIter:
         """Get ICU stays for every patient, their starts and ends. Hours will be
         indexed with 0 at the input time, with negative times denoting hours
         previous to the particular stay."""
-        cursor.execute("SELECT subject_id, icustay_id, info_icu_intime, info_icu_outtime, info_discharge_time FROM static_icustays WHERE r_age > 16")
+        cursor.execute("SELECT subject_id, icustay_id, info_icu_intime, info_icu_outtime, info_discharge_time FROM static_icustays WHERE r_age > %s", [MIN_AGE])
         # Actually 9 patients are younger than 16; one of them is 14.9 years old
         patients = collections.defaultdict(lambda: {}, {})
         for subject_id, icustay_id, intime, outtime, dischtime in cursor:
