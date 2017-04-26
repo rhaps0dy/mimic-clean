@@ -43,7 +43,7 @@ labevents_value_translation = {
     'name': 'Protein',
     'label': 'Urine',
     'one_value': False,
-    "type": 'bool', # n. floats = 35965 / 106071
+    "type": 'float', # n. floats = 35965 / 106071
     "values": {
         'NEGATIVE': 0,
         'ERROR DISREGARD PREVIOUS RESULT OF NEG': None,
@@ -51,10 +51,10 @@ labevents_value_translation = {
         'ERROR': None,
         'COMPUTER NETWORK FAILURE. TEST NOT RESULTED.': None,
         'NOT DONE': None,
-        'TR': 1,
+        'TR': 10, # means "Traces"
         'UNABLE TO REPORT': None,
-        '>300': 1,
-        '>600': 1,
+        '>300': 330,
+        '>600': 660,
         'Neg': 0,
         'NEG': 0,
         ' ': None,
@@ -81,19 +81,19 @@ labevents_value_translation = {
     'name': 'Ketone',
     'label': 'Urine',
     'one_value': False,
-    "type": 'bool', # n. floats = 10600 / 101283
+    "type": 'float', # n. floats = 10600 / 101283
     "values": {
         'ERROR DISREGARD PREVIOUS RESULT OF NEG': 0,
         'T': 1,
-        '>80': 1,
+        '>80': 88,
         'ERROR': None,
         'COMPUTER NETWORK FAILURE. TEST NOT RESULTED.': None,
         'NOT DONE': None,
-        'TR': 1,
+        'TR': 1, # Traces
         'UNABLE TO REPORT': None,
         'N': 0,
         'Neg': 0,
-        'Tr': 1,
+        'Tr': 10,
         ' ': None,
         'NEG': 0,}},
 51478: {

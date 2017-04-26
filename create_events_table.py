@@ -59,7 +59,7 @@ class TableIter:
                         icustay_id = icustay
             #icustay_id = min(self.icustays[subject_id]) # The negative one
             if icustay_id is None:
-                print("Could not infer icustay_id")
+                #print("Could not infer icustay_id")
                 return None, None, None
         #    else:
         #        print("Inferred: subject_id", subject_id, "icustay_id", icustay_id, end=' ')
@@ -70,10 +70,10 @@ class TableIter:
         #print("Hour index", hour_index)
         hour_end = intime + datetime.timedelta(hours=hour_index+1)
 
-        if hour_index < self.icustay_indices[subject_id, icustay_id][0]:
-            print("Hour index too early for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][0])
-        elif hour_index > self.icustay_indices[subject_id, icustay_id][1]:
-            print("Hour index too late for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][1])
+        #if hour_index < self.icustay_indices[subject_id, icustay_id][0]:
+        #    print("Hour index too early for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][0])
+        #elif hour_index > self.icustay_indices[subject_id, icustay_id][1]:
+        #    print("Hour index too late for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][1])
 
         return hour_index, hour_end, icustay_id
 
@@ -277,6 +277,7 @@ class outputevents(TableIter):
         r[self.item_names[itemid]] += value
 
 class drugevents(TableIter):
+    default_fill = None
     def __init__(self, w_cursor, cursor):
         del w_cursor
         super(drugevents, self).__init__(None, cursor)
@@ -359,7 +360,8 @@ class drugevents(TableIter):
              'hour': self.current_hour}
         for header, d in self.event_intervals.items():
             interval_list = d[subject_id, icustay_id]
-            r[header] = 0
+            if self.default_fill is not None:
+                r[header] = self.default_fill
             if len(interval_list) > 0:
                 if hour_start >= interval_list[0][1]:
                     # Remove the first interval
@@ -374,8 +376,8 @@ class drugevents(TableIter):
 
     def extra_hour_processing(self, subject_id, r, header, hour_end, interval_list, end_i):
         if header == 'B in_ventilator':
-            if r[header] == 1 and (hour_end >= interval_list[0][1] or
-                                    self.current_hour >= end_i):
+            if header in r and r[header] == 1 and (
+                    hour_end >= interval_list[0][1] or self.current_hour >= end_i):
                 # This is the last hour of the ventilator
                 assert len(interval_list) >= 1
                 if len(interval_list) == 1:
@@ -416,10 +418,120 @@ class procedureevents_mv(drugevents):
     def extra_hour_processing(self, *_):
         pass
 
-#class labevents(TableIter):
+class labevents(TableIter):
+    def item_name(self, id, idx):
+        type = self.d_labitems[id]['type']
+        if idx is None:
+            num = ''
+        else:
+            num = '{:d} '.format(idx)
+            type = type[idx]
+        if type == 'bool':
+            n = 'F ' # Treat as float
+        elif type == 'float':
+            n = 'F '
+        elif type == 'categorical':
+            n = 'C '
+        else:
+            raise ValueError(type)
+        n += (num + self.d_labitems[id]['name'] +
+              ', ' + self.d_labitems[id]['label'])
+        return n
+
+    def __init__(self, w_cursor, cursor):
+        super(labevents, self).__init__(w_cursor, cursor)
+        import labevents_clean
+        self.d_labitems = labevents_clean.labevents_value_translation
+        it_cats = prepare_item_categories("labevents", only_metavision=False)
+        it_cats.sort(key=lambda e: -e[2]['frequency'])
+        hids = map(lambda t: t[1], it_cats)
+        self.hids = {}
+        for id in hids:
+            if id not in self.d_labitems:
+                continue
+            item = self.d_labitems[id]
+            if not isinstance(item['type'], tuple):
+                self.hids[id] = self.item_name(id, None)
+                self.headers.append(self.hids[id])
+            else:
+                for idx in range(len(item['type'])):
+                    self.hids[id, idx] = self.item_name(id, idx)
+                    self.headers.append(self.hids[id, idx])
+
+        self.c.execute(("SELECT subject_id, NULL as icustay_id, charttime, "
+                        "itemid, value, valuenum, valueuom "
+                        "FROM labevents l "
+                        "ORDER BY subject_id, charttime"))
+        self.default_r = {}
+
+    def prepare_last_c_processing(self):
+        self.divide_dict = collections.defaultdict(lambda: 0.0, {})
+        self.value_dict = collections.defaultdict(lambda: 0.0, {})
+
+    def add_dict(self, key, value, type):
+        if value is None:
+            return
+        if type == 'categorical':
+            self.value_dict[key] = value
+        elif type in {'bool', 'float'}:
+            if type=='bool' and key in self.value_dict and value != self.value_dict[key]:
+                print("Bool already in dict", key, value)
+            self.value_dict[key] += value
+            self.divide_dict[key] += 1
+        else:
+            raise ValueError
+
+    def process_last_c(self, _):
+        subject_id, _, charttime, itemid, value, valuenum, \
+            valueuom = self.last_c
+        if itemid not in self.d_labitems:
+            return
+        if valuenum is None and value is not None:
+            try:
+                value = self.d_labitems[itemid]['values'][value]
+            except KeyError:
+                try:
+                    value = float(value)
+                except ValueError:
+                    print(itemid, value)
+                    import pdb
+                    pdb.set_trace()
+        else:
+            value = valuenum
+        if value is None:
+            return
+
+        if (not isinstance(value, tuple) and
+                isinstance(self.d_labitems[itemid]['type'], tuple)):
+            t = list(self.d_labitems[itemid]['type'])
+            done = False
+            for i, e in enumerate(t):
+                if e != 'float' or done:
+                    t[i] = 0 # 0 category corresponds to something where there
+                             # can be floats
+                else:
+                    t[i] = value
+            value = tuple(t)
+
+
+        if isinstance(value, tuple):
+            for i, v in enumerate(value):
+                n = self.hids[itemid, i]
+                self.add_dict(n, v, self.d_labitems[itemid]['type'][i])
+        else:
+            n = self.hids[itemid]
+            self.add_dict(n, value, self.d_labitems[itemid]['type'])
+
+    def return_last_c(self, r):
+        for i, v in self.value_dict.items():
+            if i in self.divide_dict:
+                v /= self.divide_dict[i]
+            r[i] = v
+        return r
 
 def main():
-    tables = {'chartevents', 'outputevents', 'drugevents', 'procedureevents_mv'}
+    tables = {'chartevents', 'outputevents', 'drugevents',
+            'procedureevents_mv', 'labevents'}
     if sys.argv[1] not in tables:
         print("Usage: {:s} {:s}".format(sys.argv[0], str(tables)))
         sys.exit(1)

@@ -7,8 +7,8 @@ SET search_path TO mimiciii;
 -- numbers yet.
 -- pred_* is used for possible prediction targets.
 
-DROP MATERIALIZED VIEW IF EXISTS static_icustays;
-CREATE MATERIALIZED VIEW static_icustays as
+DROP TABLE IF EXISTS static_icustays CASCADE;
+CREATE TABLE static_icustays AS
 SELECT * FROM (
 -- Subquery for filtering based on calculated expressions
 
@@ -69,7 +69,7 @@ SELECT
         WHEN a.ethnicity LIKE 'HISPANIC%' THEN 3             -- total 2167
         WHEN a.ethnicity LIKE 'ASIAN%' THEN 4                -- total 2015
         WHEN a.ethnicity LIKE 'AMERICAN INDIAN%' THEN 5      -- total 56
-        WHEN a.ethnicity='MIDDLE EASTERN' THEN 1 -- (caucasian) total 44
+        WHEN a.ethnicity='MIDDLE EASTERN' THEN 7 -- (caucasian) total 44
         WHEN a.ethnicity LIKE 'NATIVE HAWAIIAN%' THEN 5      -- total 18
         WHEN a.ethnicity='CARIBBEAN ISLAND' THEN 5           -- total 9
         WHEN a.ethnicity='SOUTH AMERICAN' THEN 5             -- total 9
@@ -141,3 +141,35 @@ AND s.c_ethnicity >= 0
 
 -- 44 patients have no ICU stay and are thus not reflected here
 -- 46476 do have at least one. In total we have ~60k ICU stays
+
+CREATE MATERIALIZED VIEW metavision_patients AS (SELECT DISTINCT(c.subject_id)
+	FROM chartevents c JOIN static_icustays si ON c.subject_id=si.subject_id
+	WHERE c.itemid >= 220000 AND si.r_age > 14);
+
+-- Correct patients with several ethnicities
+UPDATE static_icustays SET c_ethnicity=1 WHERE subject_id IN (1819, 2467, 3145,
+	4784, 5215, 5242, 5710, 5897, 6063, 6090, 9206, 7698, 8559, 6214, 12110,
+	6398, 6534, 9725, 13477, 12020, 10832, 10835, 15025, 13902, 16554, 90538,
+	81926, 98347, 96100, 95561, 86279, 75401, 75393, 83210, 83156, 76803,
+	71054, 69194, 81247, 71871, 58242, 59198, 62641, 50315, 63755, 51145,
+	61711, 65431, 55337, 52736, 50140, 53804, 53739 15057, 16164, 16275, 16320,
+	16516, 17728, 18756, 19104, 19241, 19296, 19470, 20236, 22122, 24402,
+	24477, 24743, 24865, 25027, 25490, 25155, 25905, 26672, 27162, 27162,
+	27879, 28600, 27083, 27337, 27464, 29121, 29142, 29999, 30129, 30155,
+	30393, 30610, 31275, 31279, 32447, 32605, 40388, 42058, 42468, 42820,
+	44715, 45985, 46057, 48693, 48752, 49649, 50721, 51628, 52125, 52307,
+	54353, 56201, 57765, 58526, 59513, 59797, 64153, 68127, 72083, 76476,
+	79556, 97659, 15641, 48340);
+UPDATE static_icustays SET c_ethnicity=2 WHERE subject_id=(27374, 7241, 518,
+	1018, 4390, 4392, 4900, 6510, 11242, 11285, 9261, 16685, 17798, 22851,
+	22896, 29866, 26996, 46566, 62186, 68457, 65401, 55753, 70180, 77947,
+	86276, 82202, 95765, 19338, 59301, 59301, 75658);
+
+UPDATE static_icustays SET c_ethnicity=3 WHERE subject_id IN (13948, 16684,
+	15679, 19493, 27210, 21318, 23100, 22505, 19827, 27106, 41902, 80015,
+	92820, 7029, 8795, 18187, 20060, 30139, 17721);
+UPDATE static_icustays SET c_ethnicity=4 WHERE subject_id IN (7533, 1104, 7533,
+	11043, 15679);
+UPDATE static_icustays SET c_ethnicity=5 WHERE subject_id IN (14667);
+UPDATE static_icustays SET c_ethnicity=6 WHERE subject_id IN (62603, 59411,
+	71244, 21955, 68605);
