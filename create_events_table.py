@@ -513,6 +513,19 @@ class labevents(TableIter):
                     t[i] = value
             value = tuple(t)
 
+        if valueuom is not None:
+            valueuom = valueuom.lower()
+            if itemid == 50889 and valueuom=="mg/dl":
+                value *= 10
+            elif itemid == 50916 and valueuom=="ug/dl":
+                value *= 10
+            elif itemid == 50958 and valueuom=="miu/ml":
+                value *= 1000
+            elif itemid == 50964 and valueuom=="mosm/kg":
+                value *= 1.025
+            elif itemid == 50989 and valueuom=="ng/dl":
+                value *= 10
+
 
         if isinstance(value, tuple):
             for i, v in enumerate(value):
