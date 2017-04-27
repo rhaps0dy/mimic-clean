@@ -37,8 +37,6 @@ class TableIter:
 
     def __iter__(self):
         self.next_stop = False
-        self.last_hour = None
-        self.empty_rows_subject_icustay = None
         subject_id = None
         while subject_id not in self.icustays:
             subject_id, icustay_id, *_ = self.last_c = next(self.c)
@@ -106,17 +104,6 @@ class TableIter:
     def __next__(self):
         if self.next_stop:
             raise StopIteration
-        if self.empty_rows_subject_icustay is not None:
-            if self.last_hour < self.icustay_indices[self.empty_rows_subject_icustay][1]:
-                self.last_hour += 1
-                r = self.default_r.copy()
-                r['subject_id'], r['icustay_id'] = self.empty_rows_subject_icustay
-                r['hour'] = self.last_hour
-                return r
-            else:
-                self.last_hour = None
-                self.icustay_completed[self.empty_rows_subject_icustay] = True
-                self.empty_rows_subject_icustay = None
 
         subject_id, icustay_id, charttime, *_ = self.last_c
         hour_index, hour_end, icustay_id = self.hour_i_end(subject_id, icustay_id, charttime)
@@ -136,16 +123,6 @@ class TableIter:
         r['subject_id'] = subject_id
         r['icustay_id'] = icustay_id
         r['hour'] = hour_index
-        if self.last_hour is None:
-            self.last_hour = min(self.icustay_indices[subject_id, icustay_id][0],
-                                 hour_index) - 1
-        if hour_index > self.last_hour + 1:
-            self.last_hour += 1
-            r['hour'] = self.last_hour
-            return r
-        self.last_hour += 1
-        assert self.last_hour == hour_index, \
-            "last_hour {:d} != hour_index {:d}".format(self.last_hour, hour_index)
 
         self.prepare_last_c_processing()
         try:
@@ -162,7 +139,7 @@ class TableIter:
                         self.hour_i_end(subject_id, icustay_id, charttime)
 
             if icustay_id != initial_icustay_id:
-                self.empty_rows_subject_icustay = (initial_subject_id, initial_icustay_id)
+                self.icustay_completed[initial_subject_id, initial_icustay_id] = True
         except StopIteration:
             self.next_stop = True
         return self.return_last_c(r)
@@ -569,7 +546,7 @@ def main():
             assert row['subject_id'] >= 0
             assert row['icustay_id'] >= 0
             if row['icustay_id'] == prev_row['icustay_id']:
-                assert row['hour'] == prev_row['hour'] + 1, \
+                assert row['hour'] >= prev_row['hour'] + 1, \
                     "hour {:d} != prev_hour {:d} + 1".format(row['hour'], prev_row['hour'])
             prev_row = row
             i += 1
