@@ -18,6 +18,7 @@ from do_one_ventilation import prepare_item_categories, get_item_names
 from create_drug_durations import drugs as DRUGS
 
 class TableIter:
+    period_length = 3600.
     def __init__(self, w_cursor, cursor):
         self.c = w_cursor
         self.item_names = get_item_names(cursor)
@@ -64,9 +65,9 @@ class TableIter:
         #else:
         #    print("Got: subject_id", subject_id, "icustay_id", icustay_id, end=' ')
         intime, _ = self.icustays[subject_id][icustay_id]
-        hour_index = math.floor((time-intime).total_seconds() / 3600)
+        hour_index = math.floor((time-intime).total_seconds() / self.period_length)
         #print("Hour index", hour_index)
-        hour_end = intime + datetime.timedelta(hours=hour_index+1)
+        hour_end = intime + datetime.timedelta(seconds=(hour_index+1)*self.period_length)
 
         #if hour_index < self.icustay_indices[subject_id, icustay_id][0]:
         #    print("Hour index too early for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][0])
@@ -519,10 +520,10 @@ class labevents(TableIter):
             r[i] = v
         return r
 
-def main():
-    tables = {'chartevents', 'outputevents', 'drugevents',
+TABLES = {'chartevents', 'outputevents', 'drugevents',
             'procedureevents_mv', 'labevents'}
-    if sys.argv[1] not in tables:
+def main():
+    if sys.argv[1] not in TABLES:
         print("Usage: {:s} {:s}".format(sys.argv[0], str(tables)))
         sys.exit(1)
     conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
