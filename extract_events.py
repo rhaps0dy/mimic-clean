@@ -10,7 +10,7 @@ import sys
 import pickle
 import re
 import itertools as it
-from memoize_pickle import memoize_pickle
+from pkl_utils import memoize_pickle
 
 # IGNORED: services, microbiologyevents, noteevents, prescriptions (relevant drugs are in inputevents)
 #

@@ -11,7 +11,6 @@ import re
 import math
 import csv
 import itertools as it
-from memoize_pickle import memoize_pickle
 from extract_events import ex_float, METAVISION_MIN_ID
 from create_drug_durations import drugs as DRUGS
 import collections

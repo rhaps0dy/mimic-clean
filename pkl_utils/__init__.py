@@ -24,3 +24,11 @@ def memoize_pickle(filename, verbose=True):
                 return data
         return wrapper
     return pk_decorator
+
+def load_pickle(filename):
+    with open(filename, 'rb') as f:
+        return pickle.load(f)
+
+def dump_pickle(filename, data):
+    with open(filename, 'wb') as f:
+        return pickle.dump(f, data)
