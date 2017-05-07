@@ -17,8 +17,10 @@ from extract_events import ex_float, METAVISION_MIN_ID, MIN_AGE
 from do_one_ventilation import prepare_item_categories, get_item_names
 from create_drug_durations import drugs as DRUGS
 
-class TableIter:
+class HourMixin:
     period_length = 3600.
+
+class TableIter:
     def __init__(self, w_cursor, cursor):
         self.c = w_cursor
         self.item_names = get_item_names(cursor)
@@ -39,8 +41,11 @@ class TableIter:
     def __iter__(self):
         self.next_stop = False
         subject_id = None
-        while subject_id not in self.icustays:
-            subject_id, icustay_id, *_ = self.last_c = next(self.c)
+        try:
+            while subject_id not in self.icustays:
+                subject_id, icustay_id, *_ = self.last_c = next(self.c)
+        except StopIteration:
+            self.next_stop = True
         return self
 
     def hour_i_end(self, subject_id, icustay_id, time):
@@ -149,7 +154,7 @@ class TableIter:
 COLUMNS_TO_IGNORE = {227378 #patient location
 }
 
-class chartevents(TableIter):
+class chartevents(TableIter, HourMixin):
     def __init__(self, w_cursor, cursor):
         super(chartevents, self).__init__(w_cursor, cursor)
         it_cats = prepare_item_categories("chartevents")
@@ -223,7 +228,7 @@ class chartevents(TableIter):
         #print("Returning", r['subject_id'], r['icustay_id'], r['hour'])
         return r
 
-class outputevents(TableIter):
+class outputevents(TableIter, HourMixin):
     def __init__(self, w_cursor, cursor):
         super(outputevents, self).__init__(w_cursor, cursor)
         print("doing main query...")
@@ -254,7 +259,7 @@ class outputevents(TableIter):
         _, _, _, itemid, value = self.last_c
         r[self.item_names[itemid]] += value
 
-class drugevents(TableIter):
+class drugevents(TableIter, HourMixin):
     default_fill = None
     def __init__(self, w_cursor, cursor):
         del w_cursor
@@ -369,7 +374,7 @@ class drugevents(TableIter):
                         self.patient_dod[subject_id]-hour_end).total_seconds() / 3600
                 r['F pred hours_until_death'] = hours_until_death
 
-class procedureevents_mv(drugevents):
+class procedureevents_mv(drugevents, HourMixin):
     def prepare_event_intervals(self, cursor):
         family_cluster = {
             228125, # Family meeting held
@@ -396,7 +401,7 @@ class procedureevents_mv(drugevents):
     def extra_hour_processing(self, *_):
         pass
 
-class labevents(TableIter):
+class labevents(TableIter, HourMixin):
     def item_name(self, id, idx):
         type = self.d_labitems[id]['type']
         if idx is None:

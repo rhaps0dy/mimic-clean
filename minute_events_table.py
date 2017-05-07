@@ -11,18 +11,20 @@ import collections
 
 class MinuteMixin:
     period_length = 60.
-class chartevents(MinuteMixin, cet.chartevents):
+class chartevents(cet.chartevents, MinuteMixin):
     pass
-class outputevents(MinuteMixin, cet.outputevents):
+class outputevents(cet.outputevents, MinuteMixin):
     pass
-class labevents(MinuteMixin, cet.labevents):
+class labevents(cet.labevents, MinuteMixin):
     pass
 
 class IntervalMixin:
     def get_icustay_events(self, subject_id, icustay_id):
         events = dict(map(lambda e: (e, []), self.event_intervals.keys()))
+        events['labels'] = []
         for k in list(events.keys()):
-            for s, e in self.event_intervals[k][subject_id, icustay_id]:
+            ev_ivs = self.event_intervals[k][subject_id, icustay_id]
+            for i, (s, e) in enumerate(ev_ivs):
                 si, _, _ = self.hour_i_end(subject_id, icustay_id, s)
                 ei, _, _ = self.hour_i_end(subject_id, icustay_id, e)
                 if len(events[k]) > 0 and events[k][-1][1] >= si:
@@ -30,6 +32,16 @@ class IntervalMixin:
                 else:
                     events[k].append((icustay_id, si, 1))
                     events[k].append((icustay_id, ei+1, 0))
+                if k == 'B in_ventilator':
+                    last_vent = (i == len(ev_ivs)-1)
+                    if self.patient_dod[subject_id] is None:
+                        hours_until_death = 80. * 365*24 # 80 years
+                    else:
+                        hours_until_death = (
+                            (self.patient_dod[subject_id]-e)
+                            .total_seconds() / 3600.)
+                    events['labels'].append((
+                        icustay_id, ei, last_vent, hours_until_death))
         return events
 
 class drugevents(cet.drugevents, IntervalMixin, MinuteMixin):
@@ -38,7 +50,7 @@ class drugevents(cet.drugevents, IntervalMixin, MinuteMixin):
 class procedureevents_mv(cet.procedureevents_mv, IntervalMixin, MinuteMixin):
     pass
 
-SOFT_ROW_LIMIT = 100000
+SOFT_ROW_LIMIT = int(1e7)
 
 def main():
     conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
@@ -57,21 +69,37 @@ def main():
     prev_rows = {}
     for table in NON_INTERVALS:
         d[table] = iter(d[table])
-        prev_rows[table] = next(d[table])
-        ended[table] = False
+        try:
+            prev_rows[table] = next(d[table])
+            ended[table] = False
+        except StopIteration:
+            prev_rows[table] = None
+            ended[table] = True
 
     n_rows = 0
-    r = {'icustay_id': 0}
+    icustay_id = 0
     data = collections.defaultdict(lambda: [], {})
-    while not any(map(lambda t: t[1], ended.items())):
-        print("Starting from icustay {:d}".format(r['icustay_id']))
-        while n_rows < SOFT_ROW_LIMIT:
+    while not all(v for _, v in ended.items()):
+        print("Starting from icustay {:d}".format(icustay_id))
+        while n_rows < SOFT_ROW_LIMIT and not all(v for _, v in ended.items()):
+            able_tables = list(filter(lambda t: not ended[t], NON_INTERVALS))
+            subject_id = min(prev_rows[t]['subject_id'] for t in able_tables)
+            icustay_id = None
+            for t in able_tables:
+                if prev_rows[t]['subject_id'] == subject_id:
+                    icu = prev_rows[t]['icustay_id']
+                    val = d['chartevents'].icustays[subject_id][icu]
+                    if icustay_id is None or val < prev_val:
+                        icustay_id = icu
+                        prev_val = val
+            del icu, val, prev_val
+
             for table in NON_INTERVALS:
                 if ended[table]:
                     continue
                 r = prev_rows[table]
                 try:
-                    while r['icustay_id'] == prev_rows[table]['icustay_id']:
+                    while r['icustay_id'] == icustay_id:
                         minute = r['hour']
                         if minute <= MINUTE_CUTOFF:
                             r_ = next(d[table])
@@ -81,25 +109,18 @@ def main():
                             for header in r:
                                 if header not in INDICES and r[header] is not None:
                                     data[header].append((
-                                        r['icustay_id'], r['hour'], r[header]))
+                                        icustay_id, minute, r[header]))
                                     n_rows += 1
                             r = next(d[table])
                     prev_rows[table] = r
                 except StopIteration:
                     ended[table] = True
-                    for header in r:
-                        if r not in INDICES and r[header] is not None:
-                            data[header].append((
-                                r['icustay_id'], r['hour'], r[header]))
-                            n_rows += 1
             for t in 'drugevents', 'procedureevents_mv':
                 for header, lst in (
-                        d[t].get_icustay_events(
-                            prev_rows['chartevents']['subject_id'], r['icustay_id']).items()):
+                        d[t].get_icustay_events(subject_id, icustay_id).items()):
                     data[header] += lst
                     n_rows += len(lst)
-        with open('no_nan/data_lt_{:d}.pkl'.format(
-                prev_rows['chartevents']['icustay_id']), 'wb') as f:
+        with open('no_nan/data_lt_{:d}.pkl'.format(icustay_id), 'wb') as f:
             pickle.dump(dict(data), f)
         del data
         n_rows = 0
