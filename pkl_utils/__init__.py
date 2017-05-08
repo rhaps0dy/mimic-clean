@@ -29,6 +29,6 @@ def load_pickle(filename):
     with open(filename, 'rb') as f:
         return pickle.load(f)
 
-def dump_pickle(filename, data):
+def dump_pickle(data, filename):
     with open(filename, 'wb') as f:
-        return pickle.dump(f, data)
+        return pickle.dump(data, f)

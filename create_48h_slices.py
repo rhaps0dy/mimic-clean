@@ -55,8 +55,14 @@ def get_frequent_headers():
                 false_values=[b'0', b''])
     return df.fillna(fillna)
 
-@memoize_pickle('training_examples.pkl')
+@memoize_pickle('48h_training_examples.pkl')
 def get_training_examples(mimic, example_len):
+    mimic_select = mimic.select(lambda h: h not in ['hour',
+                                'B pred last_ventilator'], axis=1)
+    non_nas = len(mimic_select) - mimic_select.isnull().sum()
+    mimic_mean = (mimic_select / non_nas).sum()
+    #mimic_mean = mimic_select.mean(axis=1)
+    print("calculated mean")
     examples = []
     for icustay_id, df in mimic.groupby(level=0):
         ventilation_ends = df[['hour', 'B pred last_ventilator']].dropna().values
@@ -65,6 +71,7 @@ def get_training_examples(mimic, example_len):
         last_hour = max(hour for hour, _ in ventilation_ends)
         features = df.select(lambda h: h not in ['hour',
                                     'B pred last_ventilator'], axis=1)
+        assert (mimic_select.columns == features.columns).all()
         hours = df['hour']
         val = np.empty(features.shape[1], dtype=np.float32)
         val[:] = np.nan
@@ -74,19 +81,22 @@ def get_training_examples(mimic, example_len):
         t_next = t.copy()
         vent_ts = np.empty((len(ventilation_ends), example_len,
                             features.shape[1]), dtype=np.float32)
+        vent_ts[:,:,:] = np.nan
         vent_ts_i = np.zeros(len(ventilation_ends), dtype=np.int32)
         vent_ini_t = [None]*len(ventilation_ends)
 
         i = 0
+        prev_hour = hours.iloc[0]-1000
         while i<len(df) and hours.iloc[i]<=last_hour:
             f = features.iloc[i,:].values.astype(np.float32)
             n = np.isnan(f)
             val_next[-n] = f[-n]
             t_next[-n] = 0
-            t_next += n
+            t_next += n*(hours.iloc[i] - prev_hour)
 
             for j, (hour, label) in enumerate(ventilation_ends):
                 cur_max_i = hours.iloc[i] - hour + example_len
+                prev_max_i = prev_hour - hour + example_len
                 if 0 < cur_max_i <= example_len:
                     while vent_ts_i[j] < cur_max_i:
                         if vent_ts_i[j] == 0:
@@ -95,22 +105,19 @@ def get_training_examples(mimic, example_len):
                                 vent_ini_t[j] = t_next.copy()
                             else:
                                 vent_ts[j,0,:] = val
-                                vent_ini_t[j] = t.copy()
-                        elif vent_ts_i[j] < cur_max_i-1:
-                            _v = cur_max_i-1
-                            vent_ts[vent_ts_i[j]:_v,:] = np.nan
-                            vent_ts_i[j] = _v - 1
-                        else:
+                                vent_ini_t[j] = t + (0-prev_max_i)
+                        elif vent_ts_i[j] == cur_max_i-1:
                             vent_ts[j,vent_ts_i[j],:] = f
                         vent_ts_i[j] += 1
 
                     if cur_max_i == example_len:
-                        examples.append((icustay_id, hour, label, vent_ini_t[j], vent_ts[j,:,:].copy()))
+                        examples.append((icustay_id, hour, label, vent_ini_t[j], vent_ts[j,:,:]))
 
             val[:] = val_next
             t[:] = t_next
+            prev_hour = hours.iloc[i]
             i += 1
-    return examples
+    return examples, mimic_mean
 
 if __name__ == '__main__':
     mimic = get_frequent_headers()
