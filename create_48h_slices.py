@@ -59,55 +59,57 @@ def get_frequent_headers():
 def get_training_examples(mimic, example_len):
     examples = []
     for icustay_id, df in mimic.groupby(level=0):
-        ventilation_ends = df[['hour', 'B pred last_ventilator']].dropna()
-        ventilation_ends = iter(ventilation_ends.values)
-        try:
-            hour, label = next(ventilation_ends)
-            features = df.select(lambda h: h not in ['hour',
-                                     'B pred last_ventilator'], axis=1)
-            hours = df['hour']
-            val = np.empty(features.shape[1], dtype=np.float32)
-            val[:] = np.nan
-            t = np.zeros_like(val, dtype=np.int32)
-            t += 999 # features initially missing are assumed very stale
-            vent_ts = np.empty((example_len, len(val)), dtype=np.float32)
-            vent_ts_i = 0
+        ventilation_ends = df[['hour', 'B pred last_ventilator']].dropna().values
+        if len(ventilation_ends) == 0:
+            continue
+        last_hour = max(hour for hour, _ in ventilation_ends)
+        features = df.select(lambda h: h not in ['hour',
+                                    'B pred last_ventilator'], axis=1)
+        hours = df['hour']
+        val = np.empty(features.shape[1], dtype=np.float32)
+        val[:] = np.nan
+        t = np.zeros_like(val, dtype=np.int32)
+        t += 999 # features initially missing are assumed very stale
+        val_next = val.copy()
+        t_next = t.copy()
+        vent_ts = np.empty((len(ventilation_ends), example_len,
+                            features.shape[1]), dtype=np.float32)
+        vent_ts_i = np.zeros(len(ventilation_ends), dtype=np.int32)
+        vent_ini_t = [None]*len(ventilation_ends)
 
-            for i in range(features.shape[0]):
-                f = features.iloc[i,:].values.astype(np.float32)
-                n = np.isnan(f)
+        i = 0
+        while i<len(df) and hours.iloc[i]<=last_hour:
+            f = features.iloc[i,:].values.astype(np.float32)
+            n = np.isnan(f)
+            val_next[-n] = f[-n]
+            t_next[-n] = 0
+            t_next += n
 
-                account_end = True
-                if hours.iloc[i] > hour-example_len:
-                    while vent_ts_i < hours.iloc[i] - hour + example_len:
-                        if vent_ts_i == 0:
-                            if hours.iloc[i] - hour + example_len == 1:
-                                account_end = False
-                                val[-n] = f[-n]
-                                t[-n] = 0
-                                t += n
-                            vent_ts[vent_ts_i,:] = val
-                            vent_ini_t = t.copy()
-                        elif vent_ts_i < hours.iloc[i] - hour + example_len - 1:
-                            _v = hours.iloc[i] - hour + example_len - 1
-                            vent_ts[vent_ts_i:_v,:] = np.nan
-                            vent_ts_i = _v - 1
+            for j, (hour, label) in enumerate(ventilation_ends):
+                cur_max_i = hours.iloc[i] - hour + example_len
+                if 0 < cur_max_i <= example_len:
+                    while vent_ts_i[j] < cur_max_i:
+                        if vent_ts_i[j] == 0:
+                            if cur_max_i == 1:
+                                vent_ts[j,0,:] = val_next
+                                vent_ini_t[j] = t_next.copy()
+                            else:
+                                vent_ts[j,0,:] = val
+                                vent_ini_t[j] = t.copy()
+                        elif vent_ts_i[j] < cur_max_i-1:
+                            _v = cur_max_i-1
+                            vent_ts[vent_ts_i[j]:_v,:] = np.nan
+                            vent_ts_i[j] = _v - 1
                         else:
-                            vent_ts[vent_ts_i,:] = f
-                        vent_ts_i += 1
-                if hours.iloc[i] == hour:
-                    examples.append((icustay_id, hour, label, vent_ini_t, vent_ts.copy()))
-                    vent_ts_i = 0
-                    hour, label = next(ventilation_ends)
-                else:
-                    assert hours.iloc[i] < hour
+                            vent_ts[j,vent_ts_i[j],:] = f
+                        vent_ts_i[j] += 1
 
-                if account_end:
-                    val[-n] = f[-n]
-                    t[-n] = 0
-                    t += n
-        except StopIteration:
-            pass
+                    if cur_max_i == example_len:
+                        examples.append((icustay_id, hour, label, vent_ini_t[j], vent_ts[j,:,:].copy()))
+
+            val[:] = val_next
+            t[:] = t_next
+            i += 1
     return examples
 
 if __name__ == '__main__':
