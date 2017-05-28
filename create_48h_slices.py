@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 
+###
+# Creates slices of 48h for every ventilation
+###
+
 import numpy as np
 import pandas as pd
 import itertools as it
@@ -25,7 +29,7 @@ def determine_type(header, b_is_category):
     else:
         raise ValueError(header)
 
-@memoize_pickle('48h.pkl')
+@memoize_pickle('48h.pkl.gz')
 def get_frequent_headers():
     zero_headers = get_headers('outputevents')
     bool_headers = (get_headers('procedureevents_mv') +
@@ -40,7 +44,7 @@ def get_frequent_headers():
         map(lambda e: (e, 0.0), zero_headers),
         map(lambda e: (e, False), bool_headers)))
 
-    headers, _ = load_pickle("non_missing.pkl")
+    headers, _ = load_pickle("non_missing.pkl.gz")
     headers.sort()
     headers = list(filter(lambda t: dtype[t[1]] != "category",
                           headers))
@@ -55,14 +59,14 @@ def get_frequent_headers():
                 false_values=[b'0', b''])
     return df.fillna(fillna)
 
-@memoize_pickle('48h_training_examples.pkl')
+@memoize_pickle('48h_training_examples.pkl.gz')
 def get_training_examples(mimic, example_len):
+    """ Makes slices for every ventilation-end, with the `example_len` previous
+    hours."""
     mimic_select = mimic.select(lambda h: h not in ['hour',
                                 'B pred last_ventilator'], axis=1)
     non_nas = len(mimic_select) - mimic_select.isnull().sum()
     mimic_mean = (mimic_select / non_nas).sum()
-    #mimic_mean = mimic_select.mean(axis=1)
-    print("calculated mean")
     examples = []
     for icustay_id, df in mimic.groupby(level=0):
         ventilation_ends = df[['hour', 'B pred last_ventilator']].dropna().values
