@@ -3,9 +3,9 @@
 import csv
 import gzip
 import numpy as np
-from memoize_pickle import memoize_pickle
+import pickle_utils as pu
 
-@memoize_pickle("non_missing.pkl")
+@pu.memoize("non_missing.pkl.gz")
 def main():
     with gzip.open('../mimic.csv.gz', 'rt') as gzf:
         f = csv.reader(gzf)

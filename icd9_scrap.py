@@ -1,5 +1,5 @@
 from pyquery import PyQuery
-from pkl_utils import *
+import pickle_utils as pu
 import itertools as it
 import re
 import code
@@ -31,7 +31,7 @@ def process_page(pq, tree, level):
             process_page(elem("ul"), sub_tree, level+1)
             tree.append((text, sub_tree))
 
-@memoize_pickle('basic_tree.pkl.gz')
+@pu.memoize('basic_tree.pkl.gz')
 def get_basic_tree():
     WIKI_BASE="https://en.wikipedia.org"
     d = PyQuery(url=WIKI_BASE+"/wiki/List_of_ICD-9_codes")
@@ -125,7 +125,7 @@ def check_tree_in_range(tree, start, end, level=1, interact=False):
     num_tree.sort()
     return num_tree
 
-@memoize_pickle('all_tree.pkl.gz')
+@pu.memoize('all_tree.pkl.gz')
 def all_tree():
     tree = get_basic_tree()
     num_tree = check_tree_in_range(tree, 1, 999)
@@ -191,7 +191,7 @@ def find_icd9(code, trees, leaf_dict):
 
     return indices, leaf_indices
 
-@memoize_pickle('codes_in_mimic.pkl.gz')
+@pu.memoize('codes_in_mimic.pkl.gz')
 def codes_in_mimic():
     codes = set()
     with gzip.open('DIAGNOSES_ICD.csv.gz', 'rt') as f:
@@ -234,7 +234,7 @@ def generate_level_sizes(tree, leaf_dict, level_sizes, condensed_tree, indices=(
 
 # The unused buckets if we don't delete any
 PREV_UNUSED_BUCKETS = [(0, 13, 6), (1, 24), (2, 14), (0, 0, 11)]
-@memoize_pickle("condensed_tree.pkl.gz")
+@pu.memoize("condensed_tree.pkl.gz")
 def get_condensed_tree():
     trees = all_tree()
     trees[1].insert(0, (0, 0, []))

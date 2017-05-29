@@ -5,14 +5,14 @@
 # (Not quite working)
 ###
 
-from pkl_utils import *
+import pickle_utils as pu
 import psycopg2
 import itertools as it
 from baseline import fetch_data
 
 from create_48h_slices import get_frequent_headers, get_training_examples
 
-@memoize_pickle('usable_hadm_ids.pkl.gz')
+@pu.memoize('usable_hadm_ids.pkl.gz')
 def usable_hadm_ids(cursor):
     cursor.execute("""SELECT hadm_id FROM static_icustays
         GROUP BY hadm_id HAVING COUNT(icustay_id NOT IN
@@ -21,7 +21,7 @@ def usable_hadm_ids(cursor):
             ) = 0;""")
     return set(a[0] for a in cursor.fetchall())
 
-@memoize_pickle('db_things.pkl.gz')
+@pu.memoize('db_things.pkl.gz')
 def fetch_db_things():
     conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
     conn = psycopg2.connect(conn_string)
@@ -37,7 +37,7 @@ def fetch_db_things():
         icustay_drift_hadm[icustay_id] = (hadm_id, hour_diff)
     return hadm_ids, icustay_drift_hadm
 
-@memoize_pickle('hadm_id_time_series.pkl.gz')
+@pu.memoize('hadm_id_time_series.pkl.gz')
 def hadm_id_time_series():
     hadm_ids, icustay_drift_hadm = fetch_db_things()
 

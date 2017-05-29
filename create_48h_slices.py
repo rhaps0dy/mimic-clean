@@ -11,7 +11,7 @@ import gzip
 import csv
 import math
 
-from pkl_utils import *
+import pickle_utils as pu
 
 def get_headers(table):
     with gzip.open('../mimic-clean/{:s}.csv.gz'.format(table), 'rt',
@@ -29,7 +29,7 @@ def determine_type(header, b_is_category):
     else:
         raise ValueError(header)
 
-@memoize_pickle('48h.pkl.gz')
+@pu.memoize('48h.pkl.gz')
 def get_frequent_headers():
     zero_headers = get_headers('outputevents')
     bool_headers = (get_headers('procedureevents_mv') +
@@ -44,7 +44,7 @@ def get_frequent_headers():
         map(lambda e: (e, 0.0), zero_headers),
         map(lambda e: (e, False), bool_headers)))
 
-    headers, _ = load_pickle("non_missing.pkl.gz")
+    headers, _ = pu.load("non_missing.pkl.gz")
     headers.sort()
     headers = list(filter(lambda t: dtype[t[1]] != "category",
                           headers))
@@ -59,7 +59,7 @@ def get_frequent_headers():
                 false_values=[b'0', b''])
     return df.fillna(fillna)
 
-@memoize_pickle('48h_training_examples.pkl.gz')
+@pu.memoize('48h_training_examples.pkl.gz')
 def get_training_examples(mimic, example_len):
     """ Makes slices for every ventilation-end, with the `example_len` previous
     hours."""

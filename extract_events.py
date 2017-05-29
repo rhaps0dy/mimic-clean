@@ -10,7 +10,7 @@ import sys
 import pickle
 import re
 import itertools as it
-from pkl_utils import memoize_pickle
+import pickle_utils as pu
 
 # IGNORED: services, microbiologyevents, noteevents, prescriptions (relevant drugs are in inputevents)
 #
@@ -41,7 +41,8 @@ def get_newborns(cursor, table, patient_id):
                    .format(patient_id), [MIN_AGE])
     return set(e for e, in cursor.fetchall())
 
-def list_categories(cursor, _cursor, table, max_n_categories=20, window_size=100000):
+@pu.memoize("{0:s}_item_categories.pkl.gz")
+def list_categories(table, cursor, _cursor, max_n_categories=20, window_size=100000):
     def close_item(itemid, label, item_is_number, item_all_are_None, categories, item_categories, n_numeric_values, n_total_values):
         item_categories[itemid] = {'categories': categories,
                 'frequency': n_total_values}
@@ -134,18 +135,12 @@ def list_categories(cursor, _cursor, table, max_n_categories=20, window_size=100
 
     return item_categories
 
-def get_lister_function(table):
-    @memoize_pickle("{:s}_item_categories.pkl".format(table))
-    def f(cursor, _cursor, **kwargs):
-        return list_categories(cursor, _cursor, table, **kwargs)
-    return f
-
 if __name__ == "__main__":
     conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
     conn = psycopg2.connect(conn_string)
     cursor = conn.cursor()
     cursor.execute("SET search_path TO mimiciii;")
     n_cursor = conn.cursor('n_cursor')
-    #get_lister_function('chartevents')(n_cursor, cursor)
-    #get_lister_function('outputevents')(n_cursor, cursor)
-    get_lister_function('labevents')(n_cursor, cursor)
+    #list_categories('chartevents', n_cursor, cursor)
+    #list_categories('outputevents', n_cursor, cursor)
+    list_categories('labevents', n_cursor, cursor)
