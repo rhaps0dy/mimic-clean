@@ -13,35 +13,40 @@ import csv
 import itertools as it
 import collections
 import datetime
-from extract_events import ex_float, METAVISION_MIN_ID, MIN_AGE
-from do_one_ventilation import prepare_item_categories, get_item_names
+from item_categories import ex_float
 from create_drug_durations import drugs as DRUGS
+import pickle_utils as pu
+
+METAVISION_MIN_ID = 220000
 
 class HourMixin:
+    """ Set the tables to be created by hours.
+
+    It is possible to change the time period by changing
+    TableIter.period_length, possibly by changing this mixin. """
+
     period_length = 3600.
 
 class TableIter:
     def __init__(self, w_cursor, cursor):
         self.c = w_cursor
-        self.item_names = get_item_names(cursor)
-        self.icustays = self.all_patient_icustays(cursor)
-        # self.icustay_indices now contains the indices that have to be written
-        # Prune indices that must not be written
-        for subject_id, d in list(self.icustays.items()):
-            for icustay_id in list(d.keys()):
-                if (subject_id, icustay_id) not in self.icustay_indices:
-                    del d[icustay_id]
-            if len(d) == 0:
-                del self.icustays[subject_id]
+        # item_names: the label of a given item_id
+        self.item_names = pu.load('item_names.pkl.gz')
 
-        self.icustay_completed = dict(zip(self.icustay_indices.keys(),
-                                          it.repeat(False)))
+        # icustays: a dictionary of d[subject_id][icustay_id] = (in_time, out_time)
+        # icustay_indices: a set of (subject_id, icustay_id)
+        self.icustays, self.icustay_indices = self.all_patient_icustays(cursor)
+
+        self.icustay_completed = dict(zip(
+            self.icustay_indices, it.repeat(False)))
+
         self.headers = ['subject_id', 'icustay_id', 'hour']
 
     def __iter__(self):
         self.next_stop = False
         subject_id = None
         try:
+            # Iterate until the first relevant entry in the table
             while subject_id not in self.icustays:
                 subject_id, icustay_id, *_ = self.last_c = next(self.c)
         except StopIteration:
@@ -51,7 +56,7 @@ class TableIter:
     def hour_i_end(self, subject_id, icustay_id, time):
         "Returns the appropriate hour index and hour end time"
         if subject_id not in self.icustays:
-            # If we don't have a patient, it is because they are too young.
+            # If we don't have a patient, it is because they are not selected.
             # In this case they have no icustays
             return None, None, None
         if icustay_id is None:
@@ -74,28 +79,24 @@ class TableIter:
         #print("Hour index", hour_index)
         hour_end = intime + datetime.timedelta(seconds=(hour_index+1)*self.period_length)
 
-        #if hour_index < self.icustay_indices[subject_id, icustay_id][0]:
-        #    print("Hour index too early for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][0])
-        #elif hour_index > self.icustay_indices[subject_id, icustay_id][1]:
-        #    print("Hour index too late for", subject_id, icustay_id, hour_index, self.icustay_indices[subject_id, icustay_id][1])
-
         return hour_index, hour_end, icustay_id
 
     def all_patient_icustays(self, cursor):
         """Get ICU stays for every patient, their starts and ends. Hours will be
         indexed with 0 at the input time, with negative times denoting hours
         previous to the particular stay."""
-        cursor.execute("SELECT subject_id, icustay_id, info_icu_intime, info_icu_outtime, info_discharge_time FROM static_icustays WHERE r_age > %s", [MIN_AGE])
-        # Actually 9 patients are younger than 16; one of them is 14.9 years old
+        cursor.execute("SELECT subject_id, icustay_id, info_icu_intime, "
+                       "info_icu_outtime, info_discharge_time "
+                       "FROM selected_patients")
         patients = collections.defaultdict(lambda: {}, {})
         for subject_id, icustay_id, intime, outtime, dischtime in cursor:
             patients[subject_id][icustay_id] = (intime, outtime or dischtime)
-        with open('icustay_indices.pkl', 'rb') as f:
-            self.icustay_indices = icustay_indices = pickle.load(f)
+
+        sid_iid = set()
         for subject_id, d in patients.items():
             for icustay_id, (intime, outtime) in d.items():
-                if outtime is None:
-                    d[icustay_id] = (intime, max(outtime, intime + datetime.timedelta(hours=icustay_indices[subject_id, icustay_id][1])))
+                assert outtime is not None
+                sid_iid.add((subject_id, icustay_id))
 
             intervals = list(d.items())
             intervals.sort(key=lambda k: k[1][1])
@@ -105,7 +106,7 @@ class TableIter:
                     assert intime > prev_outtime, "Icustays intervals are disjoint"
                 prev_outtime = outtime
 
-        return dict(patients)
+        return dict(patients), sid_iid
 
     def __next__(self):
         if self.next_stop:
@@ -157,10 +158,11 @@ COLUMNS_TO_IGNORE = {227378 #patient location
 class chartevents(TableIter, HourMixin):
     def __init__(self, w_cursor, cursor):
         super(chartevents, self).__init__(w_cursor, cursor)
-        it_cats = prepare_item_categories("chartevents")
-        it_cats.sort(key=lambda e: -e[2]['frequency'])
+        self.translation = pu.load("translation_chartevents.pkl.gz")
+        it_cats = list(pu.load("chartevents_item_categories.pkl.gz").items())
+        it_cats.sort(key=lambda e: -e[1]['frequency'])
         self.categories = {}
-        for _, id, d in it_cats:
+        for id, d in it_cats:
             if id in COLUMNS_TO_IGNORE:
                 continue
 
@@ -181,6 +183,7 @@ class chartevents(TableIter, HourMixin):
                         "value, valuenum, valueuom "
                         "FROM chartevents "
                         "WHERE itemid >= %s AND itemid NOT IN ({:s}) "
+                        "AND hadm_id IN (SELECT hadm_id FROM selected_patients) "
                         "ORDER BY subject_id, charttime, icustay_id"
                         .format(",".join(map(str, COLUMNS_TO_IGNORE)))),
                        [METAVISION_MIN_ID])
@@ -194,6 +197,8 @@ class chartevents(TableIter, HourMixin):
         # Unpack the last database row
         subject_id, icustay_id, charttime, itemid, value, valuenum, \
             valueuom = self.last_c
+        if itemid in self.translation:
+            itemid = self.translation[itemid]
         #print("Processing", self.last_c)
         # Add the value to the divide and value dictionaries
         cats = self.categories[itemid]
@@ -212,9 +217,6 @@ class chartevents(TableIter, HourMixin):
             self.value_dict[itemid] += v
             self.divide_dict[itemid] += 1.0
         else:
-            if ex_float.search(value) is not None:
-                print("itemid {:d}, value {:s} should not happen"
-                        .format(itemid, value))
             try:
                 self.value_dict[itemid] = cats[value]
             except KeyError:
@@ -235,11 +237,13 @@ class outputevents(TableIter, HourMixin):
         self.c.execute(("SELECT subject_id, icustay_id, charttime, itemid, value "
                         "FROM outputevents "
                         "WHERE itemid >= %s "
+                        " AND icustay_id IN (SELECT icustay_id FROM selected_patients) "
                         "ORDER BY subject_id, charttime, icustay_id"),
                        [METAVISION_MIN_ID])
         print("Doing feature-count query")
         cursor.execute(("SELECT itemid, COUNT(row_id) "
                         "FROM outputevents WHERE itemid >= %s "
+                        " AND icustay_id IN (SELECT icustay_id FROM selected_patients) "
                         "GROUP BY itemid"),
                        [METAVISION_MIN_ID])
         hs = cursor.fetchall()
@@ -267,7 +271,19 @@ class drugevents(TableIter, HourMixin):
         self.event_intervals = collections.defaultdict(
             lambda: collections.defaultdict(lambda: [], {}),
             {})
+
+        self.icustay_indices = dict(zip(self.icustay_indices,
+                                        it.repeat((math.inf, -math.inf))))
         self.prepare_event_intervals(cursor)
+        for _, d in self.event_intervals.items():
+            for k in d:
+                in_time, out_time = self.icustays[k[0]][k[1]]
+                for start, end in d[k]:
+                    start_i = int(math.ceil((in_time-start).total_seconds()/3600))
+                    end_i = int(math.ceil((out_time-end).total_seconds()/3600))
+                    start_i = min(self.icustay_indices[k][0], start_i)
+                    end_i = max(self.icustay_indices[k][1], end_i)
+                    self.icustay_indices[k] = (start_i, end_i)
 
         for _, column in self.event_intervals.items():
             for _, intervals in column.items():
@@ -295,18 +311,24 @@ class drugevents(TableIter, HourMixin):
                 continue
             cursor.execute(("SELECT subject_id, icustay_id, starttime, "
                             "endtime "
+                            # change to read from the constructed DRUG_<name>
+                            # table to use "big intervals"
                             "FROM inputevents_mv "
-                            "WHERE itemid {mv_itemid_test:s}").format(**drug))
+                            "WHERE itemid {mv_itemid_test:s} "
+                            " AND icustay_id IN (SELECT icustay_id FROM "
+                            " selected_patients)").format(**drug))
             for row in cursor:
                 key = tuple(row[:2])
                 if key in self.icustay_indices:
-                    self.event_intervals['B '+drug['drug_name']][key].append(tuple(row[2:4]))
+                    self.event_intervals['B '+drug['drug_name']
+                                         ][key].append(tuple(row[2:4]))
         drug_headers = list(self.event_intervals.keys())
 
         cursor.execute(("SELECT i.subject_id, v.icustay_id, v.starttime, "
                         "v.endtime "
                         "FROM ventdurations v JOIN icustays i "
-                        "ON v.icustay_id=i.icustay_id "))
+                        "ON v.icustay_id=i.icustay_id "
+                        "WHERE v.icustay_id IN (SELECT icustay_id FROM selected_patients) "))
         for row in cursor:
             key = tuple(row[:2])
             if key in self.icustay_indices:
@@ -322,7 +344,7 @@ class drugevents(TableIter, HourMixin):
 
     def __iter__(self):
         self.current_hour = None
-        self.icustay_iter = iter(sorted(list(self.icustay_indices.keys())))
+        self.icustay_iter = iter(sorted(list(self.icustay_indices)))
         self.current_icustay = None
         return self
 
@@ -331,6 +353,16 @@ class drugevents(TableIter, HourMixin):
             self.current_icustay = next(self.icustay_iter)
         subject_id, icustay_id = self.current_icustay
         start_i, end_i = self.icustay_indices[self.current_icustay]
+
+        while any(map(math.isinf, self.icustay_indices[self.current_icustay])):
+            assert all(map(math.isinf, self.icustay_indices[self.current_icustay]))
+            for header, d in self.event_intervals.items():
+                assert len(d[self.current_icustay]) == 0, \
+                    "The ICU stay is empty of events and thus can be discarded"
+            self.current_icustay = next(self.icustay_iter)
+            subject_id, icustay_id = self.current_icustay
+            start_i, end_i = self.icustay_indices[self.current_icustay]
+
         if self.current_hour is None:
             self.current_hour = start_i
         else:
@@ -389,7 +421,8 @@ class procedureevents_mv(drugevents, HourMixin):
         cursor.execute(("SELECT p.subject_id, p.icustay_id, p.starttime, "
                            "p.endtime, p.itemid, di.label "
                            "FROM procedureevents_mv p JOIN d_items di "
-                           "ON di.itemid=p.itemid"))
+                           "ON di.itemid=p.itemid "
+                           "WHERE p.icustay_id IN (SELECT icustay_id FROM selected_patients)"))
         for subject_id, icustay_id, starttime, endtime, itemid, label in cursor:
             key = (subject_id, icustay_id)
             if key in self.icustay_indices:
@@ -417,17 +450,17 @@ class labevents(TableIter, HourMixin):
             n = 'C '
         else:
             raise ValueError(type)
-        n += (num + self.d_labitems[id]['name'] +
-              ', ' + self.d_labitems[id]['label'])
+        n += num + self.d_labitems[id]['name']
         return n
 
     def __init__(self, w_cursor, cursor):
         super(labevents, self).__init__(w_cursor, cursor)
         import labevents_clean
         self.d_labitems = labevents_clean.labevents_value_translation
-        it_cats = prepare_item_categories("labevents", only_metavision=False)
-        it_cats.sort(key=lambda e: -e[2]['frequency'])
-        hids = map(lambda t: t[1], it_cats)
+        self.translation = pu.load("translation_labevents.pkl.gz")
+        it_cats = list(pu.load("labevents_item_categories.pkl.gz").items())
+        it_cats.sort(key=lambda e: -e[1]['frequency'])
+        hids = map(lambda t: t[0], it_cats)
         self.hids = {}
         for id in hids:
             if id not in self.d_labitems:
@@ -444,6 +477,7 @@ class labevents(TableIter, HourMixin):
         self.c.execute(("SELECT subject_id, NULL as icustay_id, charttime, "
                         "itemid, value, valuenum, valueuom "
                         "FROM labevents l "
+                        "WHERE subject_id IN (SELECT subject_id FROM selected_patients) "
                         "ORDER BY subject_id, charttime"))
         self.default_r = {}
 
@@ -467,6 +501,8 @@ class labevents(TableIter, HourMixin):
     def process_last_c(self, _):
         subject_id, _, charttime, itemid, value, valuenum, \
             valueuom = self.last_c
+        if itemid in self.translation:
+            itemid = self.translation[itemid]
         if itemid not in self.d_labitems:
             return
         if valuenum is None and value is not None:
@@ -528,8 +564,8 @@ class labevents(TableIter, HourMixin):
 TABLES = {'chartevents', 'outputevents', 'drugevents',
             'procedureevents_mv', 'labevents'}
 def main():
-    if sys.argv[1] not in TABLES:
-        print("Usage: {:s} {:s}".format(sys.argv[0], str(tables)))
+    if len(sys.argv) != 2 or sys.argv[1] not in TABLES:
+        print("Usage: {:s} {:s}".format(sys.argv[0], str(TABLES)))
         sys.exit(1)
     conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
     conn = psycopg2.connect(conn_string)
@@ -537,13 +573,16 @@ def main():
     cursor = conn.cursor()
     cursor.execute("SET search_path TO mimiciii")
     iterator = globals()[table](conn.cursor(table), cursor)
-    with open(table+'.csv', 'w') as csvfile:
+    assert len(iterator.headers) == len(set(iterator.headers)), "No duplicate headers"
+    with open(table+'.csv', 'wt') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=iterator.headers)
         writer.writeheader()
         i = 1
         print("Started iterating")
         prev_row = {'subject_id': 0, 'icustay_id': 0, 'hour': 0}
         for row in iterator:
+            if len(row) == 3:
+                continue
             if i%100000 == 0:
                 print("Doing row {:d}".format(i))
             writer.writerow(row)

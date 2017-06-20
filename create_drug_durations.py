@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import psycopg2
+import os
 
 drugs = [{
     "drug_name": "dobutamine",
@@ -121,11 +121,10 @@ for d in drugs:
         d["cv_vaso_amount"] = "amount"
 
 if __name__ == '__main__':
-    conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
-    conn = psycopg2.connect(conn_string)
-    cursor = conn.cursor()
     with open('generic_drug_durations.sql', 'r') as f:
         drug_sql = f.read()
+    if not os.path.exists('DRUGS'):
+        os.mkdir('DRUGS')
     for d in drugs:
-        with open('DRUG_{drug_name:s}.sql'.format(**d), 'w') as f:
+        with open('DRUGS/{drug_name:s}.sql'.format(**d), 'w') as f:
             f.write(drug_sql.format(**d))

@@ -1,4 +1,3 @@
-DRUG_*
 *.log
 *.pkl
 __pycache__
@@ -6,3 +5,5 @@ __pycache__
 GEN_*
 *.gz
 *.swp
+DRUGS
+cache*

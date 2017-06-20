@@ -1,4 +1,4 @@
-#!/USSR/bin/env python3
+#!/usr/bin/env python3
 
 ####
 # This file extracts all of one patient ventilation event's time data

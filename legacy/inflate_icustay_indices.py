@@ -8,7 +8,7 @@ import itertools as it
 import collections
 import math
 import os.path
-import pickle
+import pickle_utils as pu
 
 def interval(icustay_indices, k, hour, **_):
     icustay_indices[k][0] = min(icustay_indices[k][0], hour)
@@ -24,15 +24,14 @@ def discarded_features(icustay_indices, k, hour, headers, row, cutoffs):
             icustay_indices[k].add(headers[i])
 
 
-def augment_file(fname, fun, default, **kwargs):
+def augment_file(fname, fun, default, files, **kwargs):
     if os.path.isfile(fname):
-        with open(fname, 'rb') as f:
-            d = pickle.load(f)
+        d = pu.load(fname)
     else:
         d = {}
     icustay_indices = collections.defaultdict(default, d)
 
-    for pkl_f in sys.argv[1:]:
+    for pkl_f in files:
         with open(pkl_f, 'r', newline='') as csvfile:
             f = iter(csv.reader(csvfile))
             kwargs['headers'] = next(f)
@@ -42,8 +41,7 @@ def augment_file(fname, fun, default, **kwargs):
                 kwargs['row'] = row
                 fun(icustay_indices, k, hour, **kwargs)
 
-    with open(fname, 'wb') as f:
-        pickle.dump(dict(icustay_indices), f)
+    pu.dump(dict(icustay_indices), fname)
     return icustay_indices
 
 def interpret_icustay_cluster(icustay_cluster):
@@ -67,5 +65,6 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         print("Usage: {:s} <file1.csv> <file2.csv> ...".format(sys.argv[0]))
         sys.exit(1)
-    augment_file('icustay_indices.pkl', interval, lambda: [math.inf, -math.inf])
-    icustay_cluster = augment_file('icustay_cluster.pkl', hour_set, lambda: set())
+    augment_file('icustay_indices.pkl.gz', interval,
+                 lambda: [math.inf, -math.inf], sys.argv[1:])
+    #icustay_cluster = augment_file('icustay_cluster.pkl', hour_set, lambda: set())

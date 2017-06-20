@@ -1,6 +1,6 @@
-import pickle
 import csv
 import re
+import pickle_utils as pu
 
 ex_float = "([+-]?[0-9O]*[.]?[0-9O]*[.]?[0-9O]+)"
 
@@ -143,9 +143,9 @@ def correct_values(values, is_float, itemid):
         t = 'categorical'
     return values, t
 
-def pretty_print_item(it, f):
+def pretty_print_item(itemid, it, f):
     print(itemid, end=": {\n", file=f)
-    for i in 'name', 'label':
+    for i in ['name']:
         print(" "*4 + repr(i) + ': ' + repr(it[i]) + ',', file=f)
     print(" "*4 + '"type":', repr(it['type'])+',', '# n. floats =', end='', file=f)
     if float in cats['categories']:
@@ -158,24 +158,20 @@ def pretty_print_item(it, f):
     print("}},", file=f)
 
 if __name__ == '__main__':
-    with open('labevents_item_categories.pkl', 'rb') as f:
-        labevents = pickle.load(f)
-
-    with open('d_labitems.csv', 'r') as csvfile:
-        f = iter(csv.reader(csvfile))
-        next(f)
-        item_names = dict(map(lambda t: (int(t[0]), t[1:]), f))
+    labevents = pu.load('labevents_item_categories.pkl.gz')
+    item_names = pu.load('item_names.pkl.gz')
+    translation = pu.load('translation_labevents.pkl.gz')
 
     litems = list(labevents.items())
     litems.sort(key=lambda k: -k[1]['frequency'])
+    outs = {}
     with open('GEN_labevents_clean.py', 'w') as f:
         print("events = {", file=f)
         for itemid, cats in litems:
             if itemid in excluded_itemid:
                 continue
 
-            it = {"name": item_names[itemid][0],
-                  "label": item_names[itemid][1]}
+            it = {"name": item_names[itemid]}
             it["type"] = itemid in to_make_float or (float in cats['categories'] and
                               cats['categories'][float] > cats['frequency']/2)
             it["values"] = dict(filter(lambda i: i[0] is not float,
@@ -183,6 +179,6 @@ if __name__ == '__main__':
 
             it["values"], it["type"] = \
                     correct_values(it["values"], it["type"], itemid)
-            pretty_print_item(it, f)
+            pretty_print_item(itemid, it, f)
             
         print("}", file=f)

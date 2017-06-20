@@ -39,7 +39,7 @@ def sort_csv(infname, outfname):
 
             dump_icustays()
 
-def join_csvs(left_fn, right_fn, out_fn):
+def join_csvs(left_fn, right_fn, out_fn, priority=None):
     with open(left_fn, 'r', newline='') as csvf_left:
         with open(right_fn, 'r', newline='') as csvf_right:
             with open(out_fn, 'w', newline='') as csvf_out:
@@ -49,6 +49,25 @@ def join_csvs(left_fn, right_fn, out_fn):
 
                 left_header = next(left)
                 right_header = next(right)
+
+                right_removed = []
+                left_removed = []
+                if priority == 'left':
+                    for i, h in enumerate(right_header[3:]):
+                        if h in left_header:
+                            right_removed.append(i+3)
+                if priority == 'right':
+                    for i, h in enumerate(left_header[3:]):
+                        if h in right_header:
+                            left_removed.append(i+3)
+                right_removed.sort(reverse=True)
+                left_removed.sort(reverse=True)
+
+                for r in right_removed:
+                    del right_header[r]
+                for l in left_removed:
+                    del left_header[l]
+
                 out.writerow(left_header+right_header[3:])
                 left_empty = [None]*(len(left_header)-3)
                 right_empty = [None]*(len(right_header)-3)
@@ -57,15 +76,23 @@ def join_csvs(left_fn, right_fn, out_fn):
                     lrow = next(left)
                     rrow = next(right)
                     while True:
-                        tl = [int(lrow[0]), int(lrow[1]), float(lrow[2])]
-                        tr = [int(rrow[0]), int(rrow[1]), float(rrow[2])]
+                        tl = (int(lrow[0]), int(lrow[1]), float(lrow[2]))
+                        tr = (int(rrow[0]), int(rrow[1]), float(rrow[2]))
                         if tl < tr:
+                            for l in left_removed:
+                                del lrow[l]
                             out.writerow(lrow + right_empty)
                             lrow = next(left)
                         elif tl > tr:
+                            for r in right_removed:
+                                del rrow[r]
                             out.writerow(rrow[:3] + left_empty + rrow[3:])
                             rrow = next(right)
                         else:
+                            for l in left_removed:
+                                del lrow[l]
+                            for r in right_removed:
+                                del rrow[r]
                             out.writerow(lrow + rrow[3:])
                             lrow = next(left)
                             rrow = next(right)
@@ -86,7 +113,7 @@ def sort_files(fnames):
     for child in children:
         os.waitpid(child, 0)
 
-def join_files(fnames):
+def join_files(fnames, priority=None):
     width = 1
     while width < len(fnames):
         width *= 2
@@ -95,9 +122,16 @@ def join_files(fnames):
             newpid = os.fork()
             children.append(newpid)
             if newpid == 0:
-                join_csvs("{:s}.{:d}".format(fnames[i], width//2),
-                          "{:s}.{:d}".format(fnames[i+width//2], width//2),
-                          "{:s}.{:d}".format(fnames[i], width))
+                fname_left = "{:s}.{:d}".format(fnames[i], width//2)
+                fname_right = "{:s}.{:d}".format(fnames[i+width//2], width//2)
+                fname_out = "{:s}.{:d}".format(fnames[i], width)
+                if priority == fnames[i]:
+                    pr = 'left'
+                elif priority == fnames[i+width//2]:
+                    pr = 'right'
+                else:
+                    pr = None
+                join_csvs(fname_left, fname_right, fname_out, pr)
                 sys.exit(0)
         i += width
         if i < len(fnames):
@@ -106,5 +140,11 @@ def join_files(fnames):
             os.waitpid(child, 0)
 
 if __name__ == '__main__':
-    sort_files(sys.argv[1:])
-    join_files(sys.argv[1:])
+    d = {}
+    i = 1
+    if '--priority' in sys.argv:
+        priority = sys.argv.index('--priority')
+        d['priority'] = sys.argv[priority+1]
+        i = max(i, priority+2)
+    sort_files(sys.argv[i:])
+    join_files(sys.argv[i:], **d)

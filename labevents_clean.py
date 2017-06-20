@@ -40,8 +40,7 @@ labevents_value_translation = {
 #    "is_float": False, # n. floats =/ 791
 #    "values": {}}, #Free text field
 51492: {
-    'name': 'Protein',
-    'label': 'Urine',
+    'name': 'Protein - Urine',
     'one_value': False,
     "type": 'float', # n. floats = 35965 / 106071
     "values": {
@@ -60,8 +59,7 @@ labevents_value_translation = {
         ' ': None,
         'Tr': 1,}},
 51514: {
-    'name': 'Urobilinogen',
-    'label': 'Urine',
+    'name': 'Urobilinogen - Urine',
     'one_value': False,
     "type": 'float', # n. floats = 24992 / 101476
     "values": {
@@ -78,8 +76,7 @@ labevents_value_translation = {
         'N': -1,
         '>8': 8.8,}},
 51484: {
-    'name': 'Ketone',
-    'label': 'Urine',
+    'name': 'Ketone - Urine',
     'one_value': False,
     "type": 'float', # n. floats = 10600 / 101283
     "values": {
@@ -97,8 +94,7 @@ labevents_value_translation = {
         ' ': None,
         'NEG': 0,}},
 51478: {
-    'name': 'Glucose',
-    'label': 'Urine',
+    'name': 'Glucose - Urine',
     'one_value': False,
     "type": 'bool', # n. floats = 11103 / 100939
     "values": {
@@ -114,8 +110,7 @@ labevents_value_translation = {
         ' ': None,
         'UNABLE TO REPORT': None,}},
 51508: {
-    'name': 'Urine Color',
-    'label': 'Urine',
+    'name': 'Urine Color - Urine',
     'one_value': False,
     # Technically not float, but ordered
     "type": ('float', 'categorical'), # n. floats =/ 100036
@@ -185,8 +180,7 @@ labevents_value_translation = {
         ' ': (None, None),
         'ERROR DISREGARD PREVIOUS RESULT OF YELLOW': (None, None),}},
 51506: {
-    'name': 'Urine Appearance',
-    'label': 'Urine',
+    'name': 'Urine Appearance - Urine',
     'one_value': False,
     'type': ('float', 'float'), # n. floats =/ 99497
     "values": {
@@ -224,8 +218,7 @@ labevents_value_translation = {
         'ERROR DISREGARD PREVIOUS RESULT OF HAZY': None,
         'COMPUTER NETWORK FAILURE. TEST NOT RESULTED.': None,}},
 51466: {
-    'name': 'Blood',
-    'label': 'Urine',
+    'name': 'Blood - Urine',
     'one_value': False,
     # Originally not float but converted
     "type": 'float', # n. floats =/ 99385
@@ -253,8 +246,7 @@ labevents_value_translation = {
         'Sep-19-02': None,
         ' ': None,}},
 51464: {
-    'name': 'Bilirubin',
-    'label': 'Urine',
+    'name': 'Bilirubin - Urine',
     'one_value': False,
     # Originally not float
     "type": 'float', # n. floats =/ 99339
@@ -275,8 +267,7 @@ labevents_value_translation = {
         ' ': None,
         'NEG': 0,}},
 51487: {
-    'name': 'Nitrite',
-    'label': 'Urine',
+    'name': 'Nitrite - Urine',
     'one_value': False,
     "type": 'bool', # n. floats =/ 99334
     "values": {
@@ -293,8 +284,7 @@ labevents_value_translation = {
         'N': 0,
         'NEG': 0,}},
 51486: {
-    'name': 'Leukocytes',
-    'label': 'Urine',
+    'name': 'Leukocytes - Urine',
     'one_value': False,
     # Originally not float
     "type": 'float', # n. floats =/ 97288
@@ -315,8 +305,7 @@ labevents_value_translation = {
         ' ': None,
         'NEG': 0,}},
 51519: {
-    'name': 'Yeast',
-    'label': 'Urine',
+    'name': 'Yeast - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats = 56 / 85253
     "values": {
@@ -338,8 +327,7 @@ labevents_value_translation = {
         'UNABLE TO DETERMINE': None,
         'VOID': None,}},
 51463: {
-    'name': 'Bacteria',
-    'label': 'Urine',
+    'name': 'Bacteria - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats = 1038 / 73209
     "values": {
@@ -375,8 +363,7 @@ labevents_value_translation = {
         ' ': None,
         'NOTDONE': None,}},
 51266: {
-    'name': 'Platelet Smear',
-    'label': 'Blood',
+    'name': 'Platelet Smear - Blood',
     'one_value': False,
     'type': ('float', 'bool'), # n. floats =/ 38992
     "values": {
@@ -388,8 +375,7 @@ labevents_value_translation = {
         'VERY HIGH': (5, 0),
         'UNABLE TO ESTIMATE DUE TO PLATELET CLUMPS': (0, 1), }},
 51512: {
-    'name': 'Urine Mucous',
-    'label': 'Urine',
+    'name': 'Urine Mucous - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats =/ 14187
     "values": {
@@ -404,8 +390,7 @@ labevents_value_translation = {
         ' ': None,
         }},
 51523: {
-    'name': 'GR HOLD',
-    'label': 'URINE',
+    'name': 'GR HOLD - URINE',
     'one_value': False,
     "type": 'bool', # n. floats =/ 11848
     "values": {
@@ -413,8 +398,7 @@ labevents_value_translation = {
         'GOLD': 0,
         'HOLD': 0,}},
 50880: {
-    'name': 'Benzodiazepine Screen',
-    'label': 'Blood',
+    'name': 'Benzodiazepine Screen - Blood',
     'one_value': False,
     "type": 'bool', # n. floats =/ 11823
     "values": {
@@ -424,8 +408,7 @@ labevents_value_translation = {
         'ERROR': None,
         'NEG': 0,}},
 51462: {
-    'name': 'Amorphous Crystals',
-    'label': 'Urine',
+    'name': 'Amorphous Crystals - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats =/ 6817
     "values": {
@@ -441,8 +424,7 @@ labevents_value_translation = {
         ' ': None,
         'ERROR': None,}},
 51518: {
-    'name': 'WBC Clumps',
-    'label': 'Urine',
+    'name': 'WBC Clumps - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats =/ 2107
     "values": {
@@ -455,8 +437,7 @@ labevents_value_translation = {
         'OCC': (0, 1),
         'O': (0, 1), }},
 50857: {
-    'name': 'Acetone',
-    'label': 'Blood',
+    'name': 'Acetone - Blood',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats =/ 1408
     "values": {
@@ -489,8 +470,7 @@ labevents_value_translation = {
         'SAMPLE IS TOO OLD': None,
         'NOT DONE': None,}},
 51469: {
-    'name': 'Calcium Oxalate Crystals',
-    'label': 'Urine',
+    'name': 'Calcium Oxalate Crystals - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats =/ 1404
     "values": {
@@ -501,8 +481,7 @@ labevents_value_translation = {
         'MANY': (4, 0),
         'OCC': (0, 1),}},
 51513: {
-    'name': 'Urine Specimen Type',
-    'label': 'Urine',
+    'name': 'Urine Specimen Type - Urine',
     'one_value': False,
     "type": 'categorical', # n. floats =/ 1057
     "values": {
@@ -529,8 +508,7 @@ labevents_value_translation = {
         ' ': None,
         'VOID': None,}},
 51505: {
-    'name': 'Uric Acid Crystals',
-    'label': 'Urine',
+    'name': 'Uric Acid Crystals - Urine',
     'one_value': False,
     "type": ('float', 'bool'), # n. floats =/ 1056
     "values": {
@@ -544,4 +522,5 @@ labevents_value_translation = {
 }
 
 for k, v in GEN_labevents_clean.events.items():
+    assert k not in labevents_value_translation
     labevents_value_translation[k] = v
