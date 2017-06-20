@@ -51,22 +51,16 @@ def join_csvs(left_fn, right_fn, out_fn, priority=None):
                 right_header = next(right)
 
                 right_removed = []
-                left_removed = []
                 if priority == 'left':
                     for i, h in enumerate(right_header[3:]):
                         if h in left_header:
-                            right_removed.append(i+3)
+                            right_removed.append((i+3, left_header.index(h)))
                 if priority == 'right':
-                    for i, h in enumerate(left_header[3:]):
-                        if h in right_header:
-                            left_removed.append(i+3)
-                right_removed.sort(reverse=True)
-                left_removed.sort(reverse=True)
+                    raise NotImplementedError("Requires code duplication, not needed")
+                right_removed.sort(key=lambda t: -t[0])
 
-                for r in right_removed:
+                for r, _ in right_removed:
                     del right_header[r]
-                for l in left_removed:
-                    del left_header[l]
 
                 out.writerow(left_header+right_header[3:])
                 left_empty = [None]*(len(left_header)-3)
@@ -79,19 +73,22 @@ def join_csvs(left_fn, right_fn, out_fn, priority=None):
                         tl = (int(lrow[0]), int(lrow[1]), float(lrow[2]))
                         tr = (int(rrow[0]), int(rrow[1]), float(rrow[2]))
                         if tl < tr:
-                            for l in left_removed:
-                                del lrow[l]
                             out.writerow(lrow + right_empty)
                             lrow = next(left)
                         elif tl > tr:
-                            for r in right_removed:
+                            le = left_empty
+                            for r, l in right_removed:
+                                if rrow[r] != '':
+                                    if le is left_empty:
+                                        le = left_empty.copy()
+                                    le[l] = rrow[r]
                                 del rrow[r]
-                            out.writerow(rrow[:3] + left_empty + rrow[3:])
+                            out.writerow(rrow[:3] + le + rrow[3:])
                             rrow = next(right)
                         else:
-                            for l in left_removed:
-                                del lrow[l]
-                            for r in right_removed:
+                            for r, l in right_removed:
+                                if rrow[r] != '' and lrow[l] == '':
+                                    lrow[l] = rrow[r]
                                 del rrow[r]
                             out.writerow(lrow + rrow[3:])
                             lrow = next(left)

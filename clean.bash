@@ -1,4 +1,5 @@
 #!/bin/bash
+set -eu # Exit if command returns 1
 
 pip install -r requirements.txt
 

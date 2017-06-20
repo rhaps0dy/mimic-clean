@@ -213,7 +213,8 @@ class chartevents(TableIter, HourMixin):
                     match = None
                 if match is None:
                     return
-                v = float(match.group(1))
+                gs = match.groups()
+                v = float(gs[0] or gs[1])
             self.value_dict[itemid] += v
             self.divide_dict[itemid] += 1.0
         else:
