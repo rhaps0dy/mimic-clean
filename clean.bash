@@ -5,7 +5,7 @@ pip install -r requirements.txt
 
 # Create `selected_patients` in the database
 psql < static_file.sql
-cp /tmp/selected_patients.csv .
+cp /tmp/static_patients.csv .
 
 # Create drug views in the database
 # (optional unless you want to use long drug intervals)
