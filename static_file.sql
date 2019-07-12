@@ -131,7 +131,6 @@ AND s.c_marital_status >= 0
 AND s.b_gender >= 0
 AND s.c_ethnicity >= 0
 -- All of this removes no patient
---) TO '/tmp/static_patients.csv' DELIMITER ',' CSV HEADER
 ;
 
 
@@ -183,5 +182,5 @@ CREATE MATERIALIZED VIEW selected_patients AS (
   SELECT * FROM static_icustays
   WHERE hadm_id IN (SELECT * FROM selected_hadm_ids));
 
-COPY (SELECT * FROM selected_patients) TO '/tmp/selected_patients.csv'
+COPY (SELECT * FROM selected_patients) TO '/tmp/static_patients.csv'
   DELIMITER ',' CSV HEADER;

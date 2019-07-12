@@ -2,6 +2,7 @@ import psycopg2
 import pickle_utils as pu
 import itertools as it
 import collections
+import os
 
 def translation(iterable):
     d = {}
@@ -40,8 +41,7 @@ def item_names(cursor):
     return dict(it.chain(a, b))
 
 if __name__ == '__main__':
-    conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
-    conn = psycopg2.connect(conn_string)
+    conn = psycopg2.connect(os.environ["CONN_STRING"])
     cursor = conn.cursor()
     cursor.execute("SET search_path TO mimiciii")
 

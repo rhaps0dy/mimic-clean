@@ -11,6 +11,7 @@ import pickle
 import re
 import itertools as it
 import pickle_utils as pu
+import os
 
 # IGNORED: services, microbiologyevents, noteevents, prescriptions (relevant drugs are in inputevents)
 #
@@ -146,8 +147,7 @@ def list_categories(table, cursor, _cursor, max_n_categories=20, window_size=100
 if __name__ == "__main__":
     assert sys.argv[1] in {'labevents', 'chartevents'}
 
-    conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
-    conn = psycopg2.connect(conn_string)
+    conn = psycopg2.connect(os.environ["CONN_STRING"])
     cursor = conn.cursor()
     cursor.execute("SET search_path TO mimiciii;")
     n_cursor = conn.cursor('n_cursor_'+sys.argv[1])

@@ -16,6 +16,7 @@ import datetime
 from item_categories import ex_float
 from create_drug_durations import drugs as DRUGS
 import pickle_utils as pu
+import os
 
 METAVISION_MIN_ID = 220000
 
@@ -568,8 +569,7 @@ def main():
     if len(sys.argv) != 2 or sys.argv[1] not in TABLES:
         print("Usage: {:s} {:s}".format(sys.argv[0], str(TABLES)))
         sys.exit(1)
-    conn_string = "host='localhost' dbname='adria' user='adria' password='adria'"
-    conn = psycopg2.connect(conn_string)
+    conn = psycopg2.connect(os.environ["CONN_STRING"])
     table = sys.argv[1]
     cursor = conn.cursor()
     cursor.execute("SET search_path TO mimiciii")

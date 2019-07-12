@@ -1,21 +1,26 @@
 #!/bin/bash
 set -eu # Exit if command returns 1
 
+MIMIC_CODE_DIR="../mimic-code"
+
 pip install -r requirements.txt
 
+export CONN_STRING="host='localhost' dbname='mimic' user=$(whoami) password='password'"
 # Create `selected_patients` in the database
-psql < static_file.sql
+psql 'dbname=mimic' < static_file.sql
 cp /tmp/static_patients.csv .
+
+psql 'dbname=mimic' < "${MIMIC_CODE_DIR}/concepts/durations/ventilation-durations.sql"
 
 # Create drug views in the database
 # (optional unless you want to use long drug intervals)
 python create_drug_durations.py
 for f in DRUGS/*; do
-	psql < $f
+	psql 'dbname=mimic' < $f
 done
 
 # Go to directory cache
-mkdir cache
+mkdir -p cache
 pushd cache
 
 # Create files that map duplicate columns within each table with each other
